@@ -1,18 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import (
-    DateTime,
-    Enum,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-from app.core.enums import PaymentMethod, Role, TicketStatus, VisitorType
+from app.core.enums import PaymentMethod, PaymentProvider, Role, TicketStatus, VisitorType, WhatsAppProvider
 
 
 class User(Base):
@@ -22,9 +14,21 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
     phone: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
     email: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(Enum(Role), nullable=False)
     emergency_contact_name: Mapped[str | None] = mapped_column(String(120))
     emergency_contact_phone: Mapped[str | None] = mapped_column(String(20))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token: Mapped[str] = mapped_column(String(600), nullable=False, unique=True)
+    is_revoked: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -86,6 +90,9 @@ class Payment(Base):
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), nullable=False)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     method: Mapped[PaymentMethod] = mapped_column(Enum(PaymentMethod), nullable=False)
+    provider: Mapped[PaymentProvider] = mapped_column(Enum(PaymentProvider), nullable=False)
+    provider_order_id: Mapped[str | None] = mapped_column(String(100))
+    provider_payment_id: Mapped[str | None] = mapped_column(String(100))
     reference_id: Mapped[str] = mapped_column(String(100), nullable=False)
     paid_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -143,4 +150,16 @@ class Document(Base):
     file_url: Mapped[str] = mapped_column(String(255), nullable=False)
     version: Mapped[str] = mapped_column(String(20), default="1.0")
     uploaded_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class WhatsAppMessageLog(Base):
+    __tablename__ = "whatsapp_message_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    provider: Mapped[WhatsAppProvider] = mapped_column(Enum(WhatsAppProvider), nullable=False)
+    message_body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="queued")
+    external_message_id: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

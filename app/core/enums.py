@@ -22,6 +22,17 @@ class PaymentMethod(str, Enum):
     NET_BANKING = "net_banking"
 
 
+class PaymentProvider(str, Enum):
+    RAZORPAY = "razorpay"
+    STRIPE = "stripe"
+
+
 class VisitorType(str, Enum):
     GUEST = "guest"
     DELIVERY = "delivery"
+
+
+class WhatsAppProvider(str, Enum):
+    META = "meta"
+    TWILIO = "twilio"
+    GUPSHUP = "gupshup"

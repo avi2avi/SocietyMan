@@ -1,15 +1,38 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
-from app.core.enums import PaymentMethod, Role, TicketStatus, VisitorType
+from app.core.enums import (
+    PaymentMethod,
+    PaymentProvider,
+    Role,
+    TicketStatus,
+    VisitorType,
+    WhatsAppProvider,
+)
 
 
 class UserCreate(BaseModel):
     full_name: str
     phone: str
     email: EmailStr
+    password: str = Field(min_length=8)
     role: Role
     emergency_contact_name: str | None = None
     emergency_contact_phone: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class TokenPairResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 
 class UnitCreate(BaseModel):
@@ -49,7 +72,19 @@ class PaymentCreate(BaseModel):
     invoice_id: int
     amount: float
     method: PaymentMethod
+    provider: PaymentProvider
     reference_id: str
+
+
+class CreatePaymentOrderRequest(BaseModel):
+    invoice_id: int
+    provider: PaymentProvider
+
+
+class PaymentWebhookPayload(BaseModel):
+    provider: PaymentProvider
+    payload: dict
+    signature: str | None = None
 
 
 class VendorCreate(BaseModel):
@@ -69,3 +104,9 @@ class TicketCreate(BaseModel):
 class TicketUpdateStatus(BaseModel):
     status: TicketStatus
     assigned_vendor_id: int | None = None
+
+
+class WhatsAppMessageRequest(BaseModel):
+    user_id: int
+    provider: WhatsAppProvider | None = None
+    message: str

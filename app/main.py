@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 
 from app.api.routes import (
+    auth,
     billing,
+    communications,
     dashboard,
     payments,
     reports,
@@ -19,6 +21,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title=settings.app_name)
 
+app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(users.router, prefix=settings.api_prefix)
 app.include_router(units.router, prefix=settings.api_prefix)
 app.include_router(residents.router, prefix=settings.api_prefix)
@@ -29,6 +32,7 @@ app.include_router(vendors.router, prefix=settings.api_prefix)
 app.include_router(tickets.router, prefix=settings.api_prefix)
 app.include_router(dashboard.router, prefix=settings.api_prefix)
 app.include_router(reports.router, prefix=settings.api_prefix)
+app.include_router(communications.router, prefix=settings.api_prefix)
 
 
 @app.get("/")

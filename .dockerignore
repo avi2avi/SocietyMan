@@ -1,0 +1,7 @@
+.venv
+__pycache__
+*.pyc
+societyman.db
+mobile-app
+web-dashboard/node_modules
+.git

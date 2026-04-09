@@ -79,6 +79,24 @@ API docs: `http://127.0.0.1:8000/docs`
 - `GET /api/v1/reports/financial-summary.pdf`
 - `GET /api/v1/reports/financial-summary.xlsx`
 
+
+## One-command local run (Docker Compose)
+
+```bash
+docker compose up --build
+```
+
+Then open:
+- Backend API: `http://localhost:8000`
+- API docs: `http://localhost:8000/docs`
+- Web dashboard: `http://localhost:5173`
+
+Stop with `Ctrl+C` or:
+
+```bash
+docker compose down
+```
+
 ## Web Dashboard
 
 ```bash

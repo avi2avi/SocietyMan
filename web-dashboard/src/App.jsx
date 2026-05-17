@@ -121,6 +121,19 @@ export default function App() {
   const [adminUnits, setAdminUnits] = useState(null);
   const [adminLedger, setAdminLedger] = useState(null);
   const [adminTickets, setAdminTickets] = useState([]);
+  const [billHeads, setBillHeads] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [billingMonth, setBillingMonth] = useState("");
+  const [manualInvoiceUnitId, setManualInvoiceUnitId] = useState("");
+  const [manualInvoiceLineItems, setManualInvoiceLineItems] = useState([{ head_id: "", amount: "", quantity: 1 }]);
+  const [newBillHead, setNewBillHead] = useState({
+    name: "",
+    short_code: "",
+    description: "",
+    is_mandatory: false,
+    display_order: 0,
+  });
+  const [createdInvoice, setCreatedInvoice] = useState(null);
   const [societyUsers, setSocietyUsers] = useState([]);
   const [selectedSocietyId, setSelectedSocietyId] = useState(null);
   const [dbInfo, setDbInfo] = useState(null);
@@ -172,6 +185,17 @@ export default function App() {
       fetchOperationsOverview();
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !user) return;
+    if (user.role === "admin" && selectedSocietyId) {
+      fetchBillHeads(selectedSocietyId);
+    }
+    if (user.role === "society_admin") {
+      fetchBillHeads(user.society_id);
+    }
+    fetchUnits();
+  }, [token, user, selectedSocietyId]);
 
   const getAuthClient = () =>
     axios.create({
@@ -329,6 +353,144 @@ export default function App() {
     } catch (error) {
       setSocietyUsers([]);
       setMessage("Unable to load society users. Please ensure you have access.");
+    }
+  };
+
+  const fetchBillHeads = async (societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id) => {
+    if (!token || !societyId) return;
+    try {
+      const res = await axios.get(`${API_BASE}/billing-advanced/bill-heads?society_id=${societyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setBillHeads(res.data || []);
+    } catch (error) {
+      setBillHeads([]);
+    }
+  };
+
+  const fetchUnits = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API_BASE}/units`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setUnits(res.data || []);
+    } catch (error) {
+      setUnits([]);
+    }
+  };
+
+  const handleSetupDefaultHeads = async () => {
+    if (!token) return;
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    if (!societyId) {
+      setMessage("Select a society before setting up default bill heads.");
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE}/billing-advanced/bill-heads/setup-defaults`, {
+        society_id: societyId,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage("Default MCS bill heads created.");
+      fetchBillHeads(societyId);
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Failed to setup default bill heads.");
+    }
+  };
+
+  const handleCreateBillHead = async (event) => {
+    event.preventDefault();
+    if (!token) return;
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    if (!societyId) {
+      setMessage("Select a society before adding a new billing section.");
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE}/billing-advanced/bill-heads`, {
+        society_id: societyId,
+        name: newBillHead.name,
+        short_code: newBillHead.short_code,
+        description: newBillHead.description,
+        is_mandatory: newBillHead.is_mandatory,
+        display_order: Number(newBillHead.display_order) || 0,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNewBillHead({ name: "", short_code: "", description: "", is_mandatory: false, display_order: 0 });
+      setMessage("Billing section created.");
+      fetchBillHeads(societyId);
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Unable to create billing section.");
+    }
+  };
+
+  const handleAddLineItem = () => {
+    setManualInvoiceLineItems((prev) => [...prev, { head_id: "", amount: "", quantity: 1 }]);
+  };
+
+  const handleRemoveLineItem = (index) => {
+    setManualInvoiceLineItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleLineItemChange = (index, field, value) => {
+    setManualInvoiceLineItems((prev) => prev.map((item, idx) => idx === index ? { ...item, [field]: value } : item));
+  };
+
+  const resetManualInvoiceForm = () => {
+    setBillingMonth("");
+    setManualInvoiceUnitId("");
+    setManualInvoiceLineItems([{ head_id: "", amount: "", quantity: 1 }]);
+  };
+
+  const handleCreateManualInvoice = async (event) => {
+    event.preventDefault();
+    if (!token) return;
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    if (!societyId) {
+      setMessage("Select a society before creating an invoice.");
+      return;
+    }
+    if (!billingMonth) {
+      setMessage("Select a billing month.");
+      return;
+    }
+    if (!manualInvoiceUnitId) {
+      setMessage("Choose a unit for the invoice.");
+      return;
+    }
+
+    const payloadItems = manualInvoiceLineItems
+      .map((item) => ({
+        head_id: Number(item.head_id),
+        amount: Number(item.amount),
+        quantity: Number(item.quantity) || 1,
+      }))
+      .filter((item) => item.head_id && item.amount > 0);
+
+    if (!payloadItems.length) {
+      setMessage("Add at least one billed line item with an amount.");
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${API_BASE}/billing-advanced/invoices/manual`, {
+        society_id: societyId,
+        unit_id: Number(manualInvoiceUnitId),
+        billing_month: billingMonth,
+        line_items: payloadItems,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCreatedInvoice(res.data);
+      setMessage("Invoice created successfully.");
+      resetManualInvoiceForm();
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Could not create invoice.");
     }
   };
 
@@ -1803,25 +1965,130 @@ export default function App() {
       case "createBill":
         return (
           <article className="panel form-panel">
-            <h3>Create maintenance bill</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              setMessage("Bill creation feature coming soon. Use the backend API to create bills.");
-            }}>
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Advanced billing</p>
+                <h3>Create manual invoice</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => {
+                const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+                fetchBillHeads(societyId);
+                fetchUnits();
+              }}>
+                Refresh billing data
+              </button>
+            </div>
+            <p>Issue an invoice using MCS Act bill headers, add custom sections, and create a manual sample invoice for any unit.</p>
+            <form onSubmit={handleCreateManualInvoice}>
               <label className="field-group">
-                <span>Billing Month</span>
-                <input type="month" />
+                <span>Billing month</span>
+                <input type="month" value={billingMonth} onChange={(e) => setBillingMonth(e.target.value)} />
               </label>
               <label className="field-group">
-                <span>Maintenance Amount</span>
-                <input type="number" step="0.01" />
+                <span>Unit</span>
+                {units.length > 0 ? (
+                  <select value={manualInvoiceUnitId} onChange={(e) => setManualInvoiceUnitId(e.target.value)}>
+                    <option value="">Select unit</option>
+                    {units.map((unit) => (
+                      <option key={unit.id} value={unit.id}>{unit.building} {unit.unit_number}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input type="number" placeholder="Unit ID" value={manualInvoiceUnitId} onChange={(e) => setManualInvoiceUnitId(e.target.value)} />
+                )}
               </label>
-              <label className="field-group">
-                <span>Description</span>
-                <textarea></textarea>
-              </label>
-              <button className="primary-button" type="submit">Create Bill</button>
+
+              <div className="section-heading-row">
+                <div>
+                  <p className="eyebrow">Bill sections</p>
+                  <h4>Line items</h4>
+                </div>
+                <button className="secondary-button" type="button" onClick={handleAddLineItem}>Add section</button>
+              </div>
+              {billHeads.length === 0 ? (
+                <div className="panel card-panel">
+                  <p>No bill headers found for this society. Create a new section or load default MCS Act headers.</p>
+                  <button className="secondary-button" type="button" onClick={handleSetupDefaultHeads}>Setup default bill headers</button>
+                </div>
+              ) : (
+                manualInvoiceLineItems.map((item, index) => (
+                  <div className="field-group line-item-row" key={`line-item-${index}`}>
+                    <label>
+                      <span>Section</span>
+                      <select value={item.head_id} onChange={(e) => handleLineItemChange(index, "head_id", e.target.value)}>
+                        <option value="">Select section</option>
+                        {billHeads.map((head) => (
+                          <option key={head.id} value={head.id}>{head.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Amount</span>
+                      <input type="number" step="0.01" value={item.amount} onChange={(e) => handleLineItemChange(index, "amount", e.target.value)} />
+                    </label>
+                    <label>
+                      <span>Qty</span>
+                      <input type="number" min="1" value={item.quantity} onChange={(e) => handleLineItemChange(index, "quantity", e.target.value)} />
+                    </label>
+                    <button className="secondary-button" type="button" onClick={() => handleRemoveLineItem(index)}>Remove</button>
+                  </div>
+                ))
+              )}
+
+              <button className="primary-button" type="submit">Create invoice</button>
             </form>
+
+            {createdInvoice && (
+              <article className="panel card-panel">
+                <h4>Invoice created</h4>
+                <div className="metric-row">
+                  <span>Invoice number</span>
+                  <strong>{createdInvoice.invoice_number}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Total amount</span>
+                  <strong>{createdInvoice.total_amount}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Net amount</span>
+                  <strong>{createdInvoice.net_amount}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Status</span>
+                  <strong>{createdInvoice.status}</strong>
+                </div>
+                <div className="invoice-items-preview">
+                  <h5>Line items</h5>
+                  {createdInvoice.line_items?.map((item) => (
+                    <div className="ops-list-row" key={item.id}>
+                      <strong>{item.head_name}</strong>
+                      <span>{item.quantity} × {item.amount} = {item.total}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )}
+
+            <article className="panel card-panel form-panel">
+              <h3>Add new billing section</h3>
+              <form onSubmit={handleCreateBillHead}>
+                <FormField label="Section name" value={newBillHead.name} onChange={(value) => setNewBillHead((prev) => ({ ...prev, name: value }))} />
+                <FormField label="Short code" value={newBillHead.short_code} onChange={(value) => setNewBillHead((prev) => ({ ...prev, short_code: value }))} />
+                <label className="field-group">
+                  <span>Description</span>
+                  <textarea value={newBillHead.description} onChange={(e) => setNewBillHead((prev) => ({ ...prev, description: e.target.value }))} />
+                </label>
+                <label className="field-group compact-field">
+                  <span>Mandatory</span>
+                  <input type="checkbox" checked={newBillHead.is_mandatory} onChange={(e) => setNewBillHead((prev) => ({ ...prev, is_mandatory: e.target.checked }))} />
+                </label>
+                <label className="field-group">
+                  <span>Display order</span>
+                  <input type="number" value={newBillHead.display_order} onChange={(e) => setNewBillHead((prev) => ({ ...prev, display_order: e.target.value }))} />
+                </label>
+                <button className="primary-button" type="submit">Create section</button>
+              </form>
+            </article>
           </article>
         );
       case "billPayments":

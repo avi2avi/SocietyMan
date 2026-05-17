@@ -187,3 +187,48 @@ app/
 - Add React web dashboard + React Native/Flutter mobile apps.
 - Add BI-grade reporting (PDF/XLSX templates).
 - Add background jobs (Celery/RQ/Arq) for reminders & scheduled billing.
+
+## Enterprise ERP upgrade
+
+SocietyMan now includes an enterprise ERP foundation that keeps the existing society-management flows while adding a scalable ERP product layer:
+
+- **Enterprise capability API:** `GET /api/v1/erp/capabilities` returns the module catalog, AI automation roadmap, workflow samples, integration targets, deployment targets, and security controls used by the landing page.
+- **Tenant-scoped generic ERP records:** `POST/GET/PATCH/DELETE /api/v1/erp/records` provides a reusable record backbone for HRM, CRM, inventory, finance, projects, manufacturing, procurement, POS, e-commerce, documents, and reporting modules.
+- **AI and automation scaffolding:** demo data covers chatbot assistance, invoice OCR, sales forecasting, inventory prediction, finance anomaly detection, approval chains, scheduled follow-ups, and reorder workflows.
+- **Notification center and realtime channel:** `/api/v1/erp/notifications` and `/api/v1/erp/ws/notifications/{user_id}` provide in-app and WebSocket notification foundations.
+- **Production deployment assets:** Docker Compose includes PostgreSQL and Redis, while Vercel, Render, Railway, and GitHub Actions configuration files are included for free-tier deployments.
+- **Database blueprints:** SQLAlchemy models are used by the current FastAPI app; a Prisma schema is provided as the TypeScript/Next.js migration contract with UUIDs, soft delete, audit trails, timestamps, indexing, and tenant relationships.
+
+### Enterprise quick start
+
+```bash
+cp .env.example .env
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+In a second terminal:
+
+```bash
+cd web-dashboard
+npm install
+VITE_API_BASE_URL=http://localhost:8000/api/v1 npm run dev
+```
+
+Or run the production-like local stack:
+
+```bash
+docker compose up --build
+```
+
+### Key files
+
+- Backend ERP routes: `app/api/routes/erp.py`
+- SQLAlchemy ERP entities: `app/models/entities.py`
+- API DTOs: `app/schemas/dto.py`
+- React SaaS landing experience: `web-dashboard/src/App.jsx` and `web-dashboard/src/styles.css`
+- Prisma database blueprint: `prisma/schema.prisma`
+- Deployment guide: `docs/DEPLOYMENT.md`
+- API guide: `docs/API.md`

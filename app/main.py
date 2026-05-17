@@ -7,6 +7,7 @@ from app.api.routes import (
     billing,
     communications,
     dashboard,
+    erp,
     payments,
     reports,
     residents,
@@ -132,6 +133,7 @@ app.include_router(payments.router, prefix=settings.api_prefix)
 app.include_router(vendors.router, prefix=settings.api_prefix)
 app.include_router(tickets.router, prefix=settings.api_prefix)
 app.include_router(dashboard.router, prefix=settings.api_prefix)
+app.include_router(erp.router, prefix=settings.api_prefix)
 app.include_router(reports.router, prefix=settings.api_prefix)
 app.include_router(communications.router, prefix=settings.api_prefix)
 

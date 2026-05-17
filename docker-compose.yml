@@ -1,6 +1,26 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: societyman-postgres
+    environment:
+      POSTGRES_DB: societyman
+      POSTGRES_USER: societyman
+      POSTGRES_PASSWORD: societyman
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: societyman-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   backend:
     build:
       context: .
@@ -10,10 +30,14 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-      - DATABASE_URL=sqlite:////data/societyman.db
+      - DATABASE_URL=postgresql+psycopg://societyman:societyman@postgres:5432/societyman
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=change-me-in-production
     volumes:
       - ./app:/app/app
-      - societyman_data:/data
+    depends_on:
+      - postgres
+      - redis
 
   web-dashboard:
     build:
@@ -24,6 +48,7 @@ services:
       - "5173:5173"
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
     volumes:
       - ./web-dashboard:/app
       - /app/node_modules
@@ -31,4 +56,5 @@ services:
       - backend
 
 volumes:
-  societyman_data:
+  postgres_data:
+  redis_data:

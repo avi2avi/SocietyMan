@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  society_admin
+  manager
+  resident
+  gatekeeper
+  vendor
+}
+
+model Tenant {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  region    String    @default("IN")
+  plan      String    @default("starter")
+  isActive  Boolean   @default(true)
+  records   ERPRecord[]
+  auditLogs AuditLog[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([slug, isActive])
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  gstin     String?
+  currency  String   @default("INR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId, deletedAt])
+}
+
+model User {
+  id          String    @id @default(uuid())
+  tenantId    String?
+  fullName    String
+  email       String    @unique
+  phone       String    @unique
+  passwordHash String
+  role        Role
+  isActive    Boolean   @default(true)
+  mfaEnabled  Boolean   @default(false)
+  lastLoginAt DateTime?
+  auditLogs   AuditLog[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([tenantId, role, isActive])
+}
+
+model ERPRecord {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  moduleKey   String
+  recordType  String
+  title       String
+  status      String   @default("draft")
+  payload     Json
+  ownerUserId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([tenantId, moduleKey, status, deletedAt])
+  @@index([recordType, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  actorUserId String?
+  actor       User?    @relation(fields: [actorUserId], references: [id])
+  action      String
+  entityType  String
+  entityId    String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, action, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model WorkflowDefinition {
+  id         String   @id @default(uuid())
+  tenantId   String
+  key        String
+  name       String
+  trigger    String
+  definition Json
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@index([tenantId, trigger, isActive])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  title     String
+  body      String
+  channel   String   @default("in-app")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, userId, isRead, createdAt])
+}
+
+model IntegrationEndpoint {
+  id         String   @id @default(uuid())
+  tenantId   String
+  provider   String
+  name       String
+  status     String   @default("planned")
+  webhookUrl String?
+  config     Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId, provider, status])
+}

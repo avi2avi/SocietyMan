@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field, root_validator
 
 from app.core.enums import (
@@ -239,3 +240,115 @@ class WhatsAppMessageRequest(BaseModel):
     user_id: int
     provider: WhatsAppProvider | None = None
     message: str
+
+
+class ERPSuiteCapability(BaseModel):
+    key: str
+    name: str
+    description: str
+    status: str
+    features: list[str]
+
+
+class WorkflowDefinitionRead(BaseModel):
+    id: int
+    key: str
+    name: str
+    trigger: str
+    definition: str
+    is_active: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class AIAutomationJobRead(BaseModel):
+    key: str
+    name: str
+    description: str
+    status: str = "ready"
+    confidence_score: float
+    scheduled_for: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class IntegrationEndpointRead(BaseModel):
+    id: int
+    name: str
+    provider: str
+    status: str
+    webhook_url: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class ERPSuiteOverview(BaseModel):
+    platform: str
+    architecture: list[str]
+    modules: list[ERPSuiteCapability]
+    ai_automations: list[AIAutomationJobRead]
+    workflows: list[WorkflowDefinitionRead]
+    integrations: list[IntegrationEndpointRead]
+    deployment_targets: list[str]
+    security_controls: list[str]
+
+
+class TenantRead(BaseModel):
+    id: int
+    uuid: str
+    name: str
+    slug: str
+    region: str
+    plan: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class ERPRecordCreate(BaseModel):
+    module_key: str
+    record_type: str
+    title: str
+    status: str = "draft"
+    payload_json: str = "{}"
+
+
+class ERPRecordUpdate(BaseModel):
+    title: str | None = None
+    status: str | None = None
+    payload_json: str | None = None
+
+
+class ERPRecordRead(BaseModel):
+    id: int
+    uuid: str
+    tenant_key: str
+    module_key: str
+    record_type: str
+    title: str
+    status: str
+    payload_json: str
+    owner_user_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationRead(BaseModel):
+    id: int
+    uuid: str
+    title: str
+    body: str
+    channel: str
+    is_read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

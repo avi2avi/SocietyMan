@@ -602,3 +602,116 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+.enterprise-showcase,
+.ai-command-panel {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.88)), radial-gradient(circle at top right, rgba(34, 211, 238, 0.35), transparent 30%);
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  box-shadow: 0 30px 90px rgba(2, 6, 23, 0.28);
+  overflow: hidden;
+  position: relative;
+}
+
+.enterprise-showcase::before,
+.ai-command-panel::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 26px;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255,255,255,0.14), transparent 38%);
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-heading-row h3,
+.ai-command-panel h3 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2vw, 2.25rem);
+}
+
+.status-pill {
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  background: rgba(8, 145, 178, 0.18);
+  color: #a5f3fc;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.erp-module-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.erp-module-card,
+.ai-insight-item {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.16);
+  border-radius: 20px;
+  padding: 18px;
+  backdrop-filter: blur(18px);
+}
+
+.erp-module-card span,
+.ai-insight-item span {
+  color: #67e8f9;
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.erp-module-card strong,
+.ai-insight-item strong {
+  display: block;
+  font-size: 1.05rem;
+  margin-bottom: 10px;
+}
+
+.erp-module-card p,
+.ai-insight-item p {
+  color: #cbd5e1;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.ai-command-panel {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(240px, 0.8fr) 1.2fr;
+}
+
+.ai-insight-list {
+  display: grid;
+  gap: 14px;
+}
+
+@media (max-width: 860px) {
+  .section-heading-row,
+  .ai-command-panel {
+    display: block;
+  }
+
+  .status-pill {
+    display: inline-block;
+    margin-top: 16px;
+  }
+
+  .ai-insight-list {
+    margin-top: 18px;
+  }
+}

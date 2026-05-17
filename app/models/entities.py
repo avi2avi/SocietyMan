@@ -16,6 +16,9 @@ class Society(Base):
     city: Mapped[str] = mapped_column(String(100), nullable=False)
     state: Mapped[str] = mapped_column(String(100), nullable=False)
     pincode: Mapped[str] = mapped_column(String(20), nullable=False)
+    admin_contact_name: Mapped[str | None] = mapped_column(String(120))
+    admin_contact_email: Mapped[str | None] = mapped_column(String(120))
+    admin_contact_phone: Mapped[str | None] = mapped_column(String(20))
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -34,9 +37,27 @@ class User(Base):
     emergency_contact_name: Mapped[str | None] = mapped_column(String(120))
     emergency_contact_phone: Mapped[str | None] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(default=True)
+    access_erp: Mapped[bool] = mapped_column(Boolean, default=False)
+    access_gatekeeper: Mapped[bool] = mapped_column(Boolean, default=False)
+    access_billing: Mapped[bool] = mapped_column(Boolean, default=False)
+    access_payments: Mapped[bool] = mapped_column(Boolean, default=False)
+    access_communications: Mapped[bool] = mapped_column(Boolean, default=False)
+    access_reports: Mapped[bool] = mapped_column(Boolean, default=False)
+    access_documents: Mapped[bool] = mapped_column(Boolean, default=False)
+    access_visitor_management: Mapped[bool] = mapped_column(Boolean, default=False)
     password_change_required: Mapped[bool] = mapped_column(default=False)
     admin_login_code: Mapped[str | None] = mapped_column(String(20))
     admin_login_code_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Setting(Base):
+    __tablename__ = "settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

@@ -41,8 +41,30 @@ def ensure_schema():
             if "admin_login_code_expires_at" not in columns:
                 connection.execute(text("ALTER TABLE users ADD COLUMN admin_login_code_expires_at DATETIME"))
                 connection.commit()
+            for column_name in [
+                "access_erp",
+                "access_gatekeeper",
+                "access_billing",
+                "access_payments",
+                "access_communications",
+                "access_reports",
+                "access_documents",
+                "access_visitor_management",
+            ]:
+                if column_name not in columns:
+                    connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} BOOLEAN DEFAULT 0"))
+                    connection.commit()
         if "societies" in inspector.get_table_names():
             columns = [column["name"] for column in inspector.get_columns("societies")]
+            if "admin_contact_name" not in columns:
+                connection.execute(text("ALTER TABLE societies ADD COLUMN admin_contact_name VARCHAR(120)"))
+                connection.commit()
+            if "admin_contact_email" not in columns:
+                connection.execute(text("ALTER TABLE societies ADD COLUMN admin_contact_email VARCHAR(120)"))
+                connection.commit()
+            if "admin_contact_phone" not in columns:
+                connection.execute(text("ALTER TABLE societies ADD COLUMN admin_contact_phone VARCHAR(20)"))
+                connection.commit()
             if "is_approved" not in columns:
                 connection.execute(text("ALTER TABLE societies ADD COLUMN is_approved BOOLEAN DEFAULT 1"))
                 connection.commit()
@@ -53,24 +75,29 @@ def ensure_schema():
 
 def init_default_admin():
     with SessionLocal() as db:
-        existing_admin = db.query(User).filter(User.role == Role.ADMIN).first()
-        if existing_admin:
+        default_email = settings.default_admin_email.strip()
+        default_password = settings.default_admin_password
+        if not default_email or not default_password:
             return
 
-        if not settings.default_admin_email or not settings.default_admin_password:
+        default_admin = db.query(User).filter(User.email == default_email).first()
+        if default_admin:
             return
 
-        if db.query(User).filter(User.email == settings.default_admin_email).first():
-            return
+        admin_phone = settings.default_admin_phone.strip() or "0000000000"
+        fallback_index = 1
+        while db.query(User).filter(User.phone == admin_phone).first():
+            admin_phone = f"000000000{fallback_index}"
+            fallback_index += 1
 
         admin = User(
             full_name=settings.default_admin_name,
-            phone=settings.default_admin_phone,
-            email=settings.default_admin_email,
-            password_hash=hash_password(settings.default_admin_password),
+            phone=admin_phone,
+            email=default_email,
+            password_hash=hash_password(default_password),
             role=Role.ADMIN,
             society_id=None,
-            password_change_required=True,
+            password_change_required=False,
         )
         db.add(admin)
         db.commit()
@@ -78,13 +105,17 @@ def init_default_admin():
 
 ensure_schema()
 Base.metadata.create_all(bind=engine)
-init_default_admin()
+try:
+    init_default_admin()
+except Exception as exc:
+    print(f"Warning: failed to create default admin on startup: {exc}")
 
 app = FastAPI(title=settings.app_name)
 
+allowed_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allowed_origins or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

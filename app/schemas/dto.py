@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, root_validator
 
 from app.core.enums import (
     PaymentMethod,
@@ -10,6 +10,17 @@ from app.core.enums import (
 )
 
 
+class UserAccess(BaseModel):
+    erp: bool = False
+    gatekeeper: bool = False
+    billing: bool = False
+    payments: bool = False
+    communications: bool = False
+    reports: bool = False
+    documents: bool = False
+    visitor_management: bool = False
+
+
 class UserCreate(BaseModel):
     full_name: str
     phone: str
@@ -19,11 +30,26 @@ class UserCreate(BaseModel):
     society_id: int | None = None
     emergency_contact_name: str | None = None
     emergency_contact_phone: str | None = None
+    access_erp: bool = False
+    access_gatekeeper: bool = False
+    access_billing: bool = False
+    access_payments: bool = False
+    access_communications: bool = False
+    access_reports: bool = False
+    access_documents: bool = False
+    access_visitor_management: bool = False
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr | None = None
+    phone: str | None = None
     password: str
+
+    @root_validator(pre=True)
+    def require_email_or_phone(cls, values):
+        if not values.get("email") and not values.get("phone"):
+            raise ValueError("Either email or phone must be provided")
+        return values
 
 
 class RefreshTokenRequest(BaseModel):
@@ -43,9 +69,16 @@ class AdminLoginResponse(BaseModel):
 
 
 class AdminVerificationRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr | None = None
+    phone: str | None = None
     code: str
     new_password: str | None = None
+
+    @root_validator(pre=True)
+    def require_email_or_phone(cls, values):
+        if not values.get("email") and not values.get("phone"):
+            raise ValueError("Either email or phone must be provided")
+        return values
 
 
 class SocietyCreate(BaseModel):
@@ -54,6 +87,21 @@ class SocietyCreate(BaseModel):
     city: str
     state: str
     pincode: str
+    admin_contact_name: str | None = None
+    admin_contact_email: EmailStr | None = None
+    admin_contact_phone: str | None = None
+
+
+class SocietyAdminContactUpdate(BaseModel):
+    admin_contact_name: str | None = None
+    admin_contact_email: EmailStr | None = None
+    admin_contact_phone: str | None = None
+
+    @root_validator(pre=True)
+    def require_contact_info(cls, values):
+        if not values.get("admin_contact_email") and not values.get("admin_contact_phone") and not values.get("admin_contact_name"):
+            raise ValueError("At least one admin contact field must be provided")
+        return values
 
 
 class SocietyRead(BaseModel):
@@ -63,6 +111,9 @@ class SocietyRead(BaseModel):
     city: str
     state: str
     pincode: str
+    admin_contact_name: str | None = None
+    admin_contact_email: EmailStr | None = None
+    admin_contact_phone: str | None = None
     is_approved: bool = False
 
     class Config:
@@ -73,9 +124,41 @@ class UserRead(BaseModel):
     id: int
     full_name: str
     email: EmailStr
+    phone: str
     role: Role
     society_id: int | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_phone: str | None = None
     is_active: bool
+    access_erp: bool = False
+    access_gatekeeper: bool = False
+    access_billing: bool = False
+    access_payments: bool = False
+    access_communications: bool = False
+    access_reports: bool = False
+    access_documents: bool = False
+    access_visitor_management: bool = False
+
+    class Config:
+        orm_mode = True
+
+
+class UserAccessUpdate(BaseModel):
+    access_erp: bool | None = None
+    access_gatekeeper: bool | None = None
+    access_billing: bool | None = None
+    access_payments: bool | None = None
+    access_communications: bool | None = None
+    access_reports: bool | None = None
+    access_documents: bool | None = None
+    access_visitor_management: bool | None = None
+    is_active: bool | None = None
+
+
+class SettingRead(BaseModel):
+    key: str
+    value: str
+    description: str | None = None
 
     class Config:
         orm_mode = True

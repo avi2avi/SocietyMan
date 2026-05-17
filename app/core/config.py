@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class Settings(BaseModel):
     app_name: str = os.getenv("APP_NAME", "SocietyMan API")
     api_prefix: str = os.getenv("API_PREFIX", "/api/v1")
+    cors_allow_origins: str = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000")
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./societyman.db")
     secret_key: str = os.getenv("SECRET_KEY", "change-me-in-production")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")    
@@ -29,6 +30,13 @@ class Settings(BaseModel):
     gupshup_api_key: str = os.getenv("GUPSHUP_API_KEY", "")
     gupshup_app_name: str = os.getenv("GUPSHUP_APP_NAME", "")
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    # SMTP settings for sending emails
+    smtp_host: str = os.getenv("SMTP_HOST", "")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "0"))
+    smtp_username: str = os.getenv("SMTP_USERNAME", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_from: str = os.getenv("SMTP_FROM", "")
+    smtp_use_tls: bool = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
 
 
 settings = Settings()

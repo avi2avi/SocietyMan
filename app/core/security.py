@@ -5,7 +5,7 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 
 
 class TokenError(ValueError):
@@ -13,11 +13,16 @@ class TokenError(ValueError):
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    # bcrypt has a 72-byte input limit; truncate to avoid errors
+    if password is None:
+        password = ""
+    return pwd_context.hash(password[:72])
 
 
 def verify_password(password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(password, hashed_password)
+    if password is None:
+        password = ""
+    return pwd_context.verify(password[:72], hashed_password)
 
 
 def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> str:

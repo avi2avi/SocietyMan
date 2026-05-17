@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,7 +9,8 @@ from app.core.database import get_db
 from app.core.enums import Role
 from app.core.security import hash_password
 from app.models.entities import Society, User
-from app.schemas.dto import UserCreate, UserRead
+from app.schemas.dto import UserCreate, UserRead, UserAccessUpdate
+from app.services.notifications import send_society_admin_credentials
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -90,6 +92,77 @@ def approve_user(user_id: int, current_user: User = Depends(get_current_user), d
     db.commit()
     db.refresh(pending_user)
     return pending_user
+
+
+@router.get("/society/{society_id}/users", response_model=list[UserRead])
+def list_society_users(society_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    society = db.get(Society, society_id)
+    if not society:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Society not found")
+
+    if current_user.role != Role.ADMIN and not (
+        current_user.role == Role.SOCIETY_ADMIN and current_user.society_id == society_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Developer or society admin access required")
+
+    return db.query(User).filter(User.society_id == society_id).all()
+
+
+@router.patch("/{user_id}/access", response_model=UserRead)
+def update_user_access(user_id: int, payload: UserAccessUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if current_user.role != Role.ADMIN and not (
+        current_user.role == Role.SOCIETY_ADMIN and current_user.society_id == user.society_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this user")
+
+    updates = payload.model_dump(exclude_none=True)
+    for field, value in updates.items():
+        setattr(user, field, value)
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/{user_id}/promote", response_model=UserRead)
+def promote_to_society_admin(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user or not user.society_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Society user not found")
+
+    if current_user.role != Role.ADMIN and not (
+        current_user.role == Role.SOCIETY_ADMIN and current_user.society_id == user.society_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to promote this user")
+
+    if user.role == Role.SOCIETY_ADMIN:
+        return user
+
+    new_password = secrets.token_urlsafe(10)[:12]
+    user.role = Role.SOCIETY_ADMIN
+    user.password_hash = hash_password(new_password)
+    user.password_change_required = True
+    user.is_active = True
+    user.access_erp = True
+    user.access_gatekeeper = True
+    user.access_billing = True
+    user.access_payments = True
+    user.access_communications = True
+    user.access_reports = True
+    user.access_documents = True
+    user.access_visitor_management = True
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    send_society_admin_credentials(user.email, user.phone, user.email or user.phone, new_password)
+    return user
 
 
 @router.get("/me", response_model=UserRead)

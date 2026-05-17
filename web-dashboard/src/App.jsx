@@ -134,6 +134,14 @@ export default function App() {
     display_order: 0,
   });
   const [createdInvoice, setCreatedInvoice] = useState(null);
+  const [billTemplates, setBillTemplates] = useState([]);
+  const [templateName, setTemplateName] = useState("");
+  const [templateLineItems, setTemplateLineItems] = useState([{ head_id: "", amount: "", is_percentage: false, percentage_value: 0 }]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(null);
+  const [generatedInvoices, setGeneratedInvoices] = useState([]);
+  const [invoiceSummary, setInvoiceSummary] = useState(null);
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState("");
+  const [billingTemplateMonth, setBillingTemplateMonth] = useState("");
   const [societyUsers, setSocietyUsers] = useState([]);
   const [selectedSocietyId, setSelectedSocietyId] = useState(null);
   const [dbInfo, setDbInfo] = useState(null);
@@ -380,6 +388,47 @@ export default function App() {
     }
   };
 
+  const fetchBillTemplates = async (societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id) => {
+    if (!token || !societyId) return;
+    try {
+      const res = await axios.get(`${API_BASE}/billing-advanced/templates?society_id=${societyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setBillTemplates(res.data || []);
+    } catch (error) {
+      setBillTemplates([]);
+    }
+  };
+
+  const fetchInvoiceSummary = async (societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id) => {
+    if (!token || !societyId) return;
+    try {
+      const res = await axios.get(`${API_BASE}/billing-advanced/invoices/stats/summary?society_id=${societyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setInvoiceSummary(res.data);
+    } catch (error) {
+      setInvoiceSummary(null);
+    }
+  };
+
+  const fetchInvoices = async (filters = {}) => {
+    if (!token) return;
+    const params = [];
+    if (filters.society_id) params.push(`society_id=${filters.society_id}`);
+    if (filters.status) params.push(`status=${filters.status}`);
+    if (filters.billing_month) params.push(`billing_month=${filters.billing_month}`);
+    const query = params.length ? `?${params.join("&")}` : "";
+    try {
+      const res = await axios.get(`${API_BASE}/billing-advanced/invoices${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setGeneratedInvoices(res.data || []);
+    } catch (error) {
+      setGeneratedInvoices([]);
+    }
+  };
+
   const handleSetupDefaultHeads = async () => {
     if (!token) return;
     const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
@@ -396,6 +445,8 @@ export default function App() {
       });
       setMessage("Default MCS bill heads created.");
       fetchBillHeads(societyId);
+      fetchBillTemplates(societyId);
+      fetchInvoiceSummary(societyId);
     } catch (error) {
       setMessage(error.response?.data?.detail || "Failed to setup default bill heads.");
     }
@@ -489,9 +540,129 @@ export default function App() {
       setCreatedInvoice(res.data);
       setMessage("Invoice created successfully.");
       resetManualInvoiceForm();
+      fetchInvoiceSummary(societyId);
+      fetchInvoices({ society_id: societyId, billing_month: billingMonth });
     } catch (error) {
       setMessage(error.response?.data?.detail || "Could not create invoice.");
     }
+  };
+
+  const handleTemplateLineItemChange = (index, field, value) => {
+    setTemplateLineItems((prev) => prev.map((item, idx) => idx === index ? { ...item, [field]: value } : item));
+  };
+
+  const handleAddTemplateLineItem = () => {
+    setTemplateLineItems((prev) => [...prev, { head_id: "", amount: "", is_percentage: false, percentage_value: 0 }]);
+  };
+
+  const handleRemoveTemplateLineItem = (index) => {
+    setTemplateLineItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleCreateTemplate = async (event) => {
+    event.preventDefault();
+    if (!token) return;
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    if (!societyId) {
+      setMessage("Select a society before creating a billing template.");
+      return;
+    }
+    if (!templateName) {
+      setMessage("Enter a template name.");
+      return;
+    }
+
+    const payloadHeads = templateLineItems
+      .map((item) => ({
+        head_id: Number(item.head_id),
+        amount: Number(item.amount) || 0,
+        is_percentage: Boolean(item.is_percentage),
+        percentage_value: Number(item.percentage_value) || 0,
+      }))
+      .filter((item) => item.head_id && (item.amount > 0 || item.percentage_value > 0));
+
+    if (!payloadHeads.length) {
+      setMessage("Add at least one line item to the template.");
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE}/billing-advanced/templates`, {
+        society_id: societyId,
+        name: templateName,
+        heads: payloadHeads,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setTemplateName("");
+      setTemplateLineItems([{ head_id: "", amount: "", is_percentage: false, percentage_value: 0 }]);
+      setMessage("Billing template created.");
+      fetchBillTemplates(societyId);
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Unable to create billing template.");
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId) => {
+    if (!token) return;
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    try {
+      await axios.delete(`${API_BASE}/billing-advanced/templates/${templateId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage("Template deleted.");
+      if (templateId === selectedTemplateId) {
+        setSelectedTemplateId(null);
+      }
+      fetchBillTemplates(societyId);
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Unable to delete template.");
+    }
+  };
+
+  const handleGenerateInvoices = async (event) => {
+    event.preventDefault();
+    if (!token) return;
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    if (!societyId) {
+      setMessage("Select a society before generating invoices.");
+      return;
+    }
+    if (!selectedTemplateId) {
+      setMessage("Select a billing template.");
+      return;
+    }
+    if (!billingTemplateMonth) {
+      setMessage("Select a billing month for invoice generation.");
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${API_BASE}/billing-advanced/invoices/generate`, {
+        society_id: societyId,
+        template_id: Number(selectedTemplateId),
+        billing_month: billingTemplateMonth,
+        notes: "Generated from template",
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setGeneratedInvoices(res.data || []);
+      setMessage("Invoices generated successfully.");
+      fetchInvoiceSummary(societyId);
+      fetchInvoices({ society_id: societyId, billing_month: billingTemplateMonth });
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Unable to generate invoices.");
+    }
+  };
+
+  const handleLoadTemplateToInvoice = (template) => {
+    if (!template || !template.heads) return;
+    setManualInvoiceLineItems(template.heads.map((head) => ({
+      head_id: head.head_id,
+      amount: head.amount,
+      quantity: 1,
+    })));
+    setMessage(`Loaded template '${template.name}' into manual invoice.`);
   };
 
   useEffect(() => {
@@ -1974,6 +2145,9 @@ export default function App() {
                 const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
                 fetchBillHeads(societyId);
                 fetchUnits();
+                fetchBillTemplates(societyId);
+                fetchInvoiceSummary(societyId);
+                fetchInvoices({ society_id: societyId });
               }}>
                 Refresh billing data
               </button>
@@ -2037,6 +2211,137 @@ export default function App() {
 
               <button className="primary-button" type="submit">Create invoice</button>
             </form>
+
+            <article className="panel card-panel form-panel">
+              <div className="section-heading-row light">
+                <div>
+                  <p className="eyebrow">Templates</p>
+                  <h4>Billing template builder</h4>
+                </div>
+              </div>
+              <p>Create reusable invoice templates from configured bill heads or load an existing template into the manual invoice.</p>
+              <label className="field-group">
+                <span>Select template</span>
+                <select value={selectedTemplateId || ""} onChange={(e) => setSelectedTemplateId(e.target.value)}>
+                  <option value="">Select existing template</option>
+                  {billTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="button-group">
+                <button className="secondary-button" type="button" onClick={() => {
+                  const template = billTemplates.find((tpl) => tpl.id === Number(selectedTemplateId));
+                  handleLoadTemplateToInvoice(template);
+                }} disabled={!selectedTemplateId}>Load template into invoice</button>
+                <button className="secondary-button" type="button" onClick={() => handleDeleteTemplate(selectedTemplateId)} disabled={!selectedTemplateId}>Delete template</button>
+              </div>
+              <form onSubmit={handleCreateTemplate}>
+                <FormField label="Template name" value={templateName} onChange={(value) => setTemplateName(value)} />
+                {templateLineItems.map((item, index) => (
+                  <div className="field-group line-item-row" key={`template-line-item-${index}`}>
+                    <label>
+                      <span>Section</span>
+                      <select value={item.head_id} onChange={(e) => handleTemplateLineItemChange(index, "head_id", e.target.value)}>
+                        <option value="">Select section</option>
+                        {billHeads.map((head) => (
+                          <option key={head.id} value={head.id}>{head.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Amount</span>
+                      <input type="number" step="0.01" value={item.amount} onChange={(e) => handleTemplateLineItemChange(index, "amount", e.target.value)} />
+                    </label>
+                    <label>
+                      <span>% Value</span>
+                      <input type="number" step="0.01" value={item.percentage_value} onChange={(e) => handleTemplateLineItemChange(index, "percentage_value", e.target.value)} />
+                    </label>
+                    <label className="field-group compact-field">
+                      <span>Use %</span>
+                      <input type="checkbox" checked={item.is_percentage} onChange={(e) => handleTemplateLineItemChange(index, "is_percentage", e.target.checked)} />
+                    </label>
+                    <button className="secondary-button" type="button" onClick={() => handleRemoveTemplateLineItem(index)}>Remove</button>
+                  </div>
+                ))}
+                <button className="secondary-button" type="button" onClick={handleAddTemplateLineItem}>Add template section</button>
+                <button className="primary-button" type="submit">Save template</button>
+              </form>
+              {billTemplates.length > 0 && (
+                <div className="template-list">
+                  <h5>Existing templates</h5>
+                  {billTemplates.map((template) => (
+                    <div key={template.id} className="ops-list-row">
+                      <strong>{template.name}</strong>
+                      <span>{template.heads?.length || 0} sections</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+
+            <article className="panel card-panel form-panel">
+              <div className="section-heading-row light">
+                <div>
+                  <p className="eyebrow">Generate invoices</p>
+                  <h4>Bulk generation</h4>
+                </div>
+              </div>
+              <p>Use a saved template to generate invoices for all society units.</p>
+              <form onSubmit={handleGenerateInvoices}>
+                <label className="field-group">
+                  <span>Template</span>
+                  <select value={selectedTemplateId || ""} onChange={(e) => setSelectedTemplateId(e.target.value)}>
+                    <option value="">Select template</option>
+                    {billTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>{template.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-group">
+                  <span>Billing month</span>
+                  <input type="month" value={billingTemplateMonth} onChange={(e) => setBillingTemplateMonth(e.target.value)} />
+                </label>
+                <button className="primary-button" type="submit">Generate invoices</button>
+              </form>
+              {generatedInvoices.length > 0 && (
+                <div className="invoice-list-summary">
+                  <h5>Generated invoices</h5>
+                  {generatedInvoices.slice(0, 5).map((invoice) => (
+                    <div key={invoice.invoice_id} className="ops-list-row">
+                      <strong>{invoice.invoice_number}</strong>
+                      <span>Unit {invoice.unit_id} • {invoice.status} • ₹{invoice.net_amount}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+
+            {invoiceSummary && (
+              <article className="panel card-panel">
+                <h4>Invoice summary</h4>
+                <div className="metric-row">
+                  <span>Total invoices</span>
+                  <strong>{invoiceSummary.total_invoices}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Pending</span>
+                  <strong>{invoiceSummary.pending}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Paid</span>
+                  <strong>{invoiceSummary.paid}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Overdue</span>
+                  <strong>{invoiceSummary.overdue}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Outstanding</span>
+                  <strong>₹{invoiceSummary.outstanding}</strong>
+                </div>
+              </article>
+            )}
 
             {createdInvoice && (
               <article className="panel card-panel">

@@ -15,7 +15,8 @@ class UserCreate(BaseModel):
     phone: str
     email: EmailStr
     password: str = Field(min_length=8)
-    role: Role
+    role: Role = Role.RESIDENT
+    society_id: int | None = None
     emergency_contact_name: str | None = None
     emergency_contact_phone: str | None = None
 
@@ -33,6 +34,51 @@ class TokenPairResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class AdminLoginResponse(BaseModel):
+    verification_required: bool
+    password_change_required: bool = False
+    message: str
+
+
+class AdminVerificationRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str | None = None
+
+
+class SocietyCreate(BaseModel):
+    name: str
+    address: str
+    city: str
+    state: str
+    pincode: str
+
+
+class SocietyRead(BaseModel):
+    id: int
+    name: str
+    address: str
+    city: str
+    state: str
+    pincode: str
+    is_approved: bool = False
+
+    class Config:
+        orm_mode = True
+
+
+class UserRead(BaseModel):
+    id: int
+    full_name: str
+    email: EmailStr
+    role: Role
+    society_id: int | None = None
+    is_active: bool
+
+    class Config:
+        orm_mode = True
 
 
 class UnitCreate(BaseModel):

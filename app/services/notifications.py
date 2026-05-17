@@ -9,3 +9,8 @@ def notify_ticket_update(resident_user_id: int, ticket_id: int, status: str) -> 
 
 def send_payment_reminder(resident_user_id: int, amount: float) -> None:
     print(f"Reminder to resident {resident_user_id}: pending amount {amount}")
+
+
+def send_admin_verification_code(email: str, code: str) -> None:
+    print(f"ADMIN VERIFICATION CODE for {email}: {code}")
+    print("(In production this code should be sent to the registered email address.)")

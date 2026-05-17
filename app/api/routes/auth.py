@@ -1,25 +1,82 @@
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.enums import Role
 from app.core.security import (
     TokenError,
     create_access_token,
     create_refresh_token,
     decode_token,
+    hash_password,
     verify_password,
 )
 from app.models.entities import RefreshToken, User
-from app.schemas.dto import LoginRequest, RefreshTokenRequest, TokenPairResponse
+from app.schemas.dto import (
+    AdminLoginResponse,
+    AdminVerificationRequest,
+    LoginRequest,
+    RefreshTokenRequest,
+    TokenPairResponse,
+)
+from app.services.notifications import send_admin_verification_code
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/login", response_model=TokenPairResponse)
+@router.post("/login")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not activated yet")
+
+    if user.role in (Role.ADMIN, Role.SOCIETY_ADMIN):
+        verification_code = "".join(secrets.choice("0123456789") for _ in range(6))
+        expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
+        user.admin_login_code = verification_code
+        user.admin_login_code_expires_at = expiry
+        db.add(user)
+        db.commit()
+        send_admin_verification_code(user.email, verification_code)
+        return AdminLoginResponse(
+            verification_required=True,
+            password_change_required=user.password_change_required,
+            message="A verification code has been sent to the registered email address.",
+        )
+
+    access_token = create_access_token(str(user.id))
+    refresh_token = create_refresh_token(str(user.id))
+    db.add(RefreshToken(user_id=user.id, token=refresh_token))
+    db.commit()
+
+    return TokenPairResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/verify", response_model=TokenPairResponse)
+def verify_admin_login(payload: AdminVerificationRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user or user.role not in (Role.ADMIN, Role.SOCIETY_ADMIN):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin login")
+    if not user.admin_login_code or not user.admin_login_code_expires_at:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Verification code required")
+    if user.admin_login_code != payload.code:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid verification code")
+    if datetime.now(timezone.utc) > user.admin_login_code_expires_at:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Verification code expired")
+    if user.password_change_required:
+        if not payload.new_password:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New password is required for first-time admin login")
+        user.password_hash = hash_password(payload.new_password)
+        user.password_change_required = False
+
+    user.admin_login_code = None
+    user.admin_login_code_expires_at = None
+    db.add(user)
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))

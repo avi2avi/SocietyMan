@@ -1,10 +1,24 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.core.enums import PaymentMethod, PaymentProvider, Role, TicketStatus, VisitorType, WhatsAppProvider
+
+
+class Society(Base):
+    __tablename__ = "societies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    address: Mapped[str] = mapped_column(String(255), nullable=False)
+    city: Mapped[str] = mapped_column(String(100), nullable=False)
+    state: Mapped[str] = mapped_column(String(100), nullable=False)
+    pincode: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class User(Base):
@@ -16,9 +30,13 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(Enum(Role), nullable=False)
+    society_id: Mapped[int | None] = mapped_column(ForeignKey("societies.id"), nullable=True)
     emergency_contact_name: Mapped[str | None] = mapped_column(String(120))
     emergency_contact_phone: Mapped[str | None] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(default=True)
+    password_change_required: Mapped[bool] = mapped_column(default=False)
+    admin_login_code: Mapped[str | None] = mapped_column(String(20))
+    admin_login_code_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

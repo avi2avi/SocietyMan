@@ -1,0 +1,6 @@
+{
+  "tenant": "Acme Global Operations",
+  "modules": ["hrm", "crm", "inventory", "finance", "projects", "manufacturing", "procurement", "pos", "commerce"],
+  "aiAutomations": ["chatbot", "invoice-ocr", "sales-forecasting", "inventory-prediction", "finance-anomaly"],
+  "reports": ["profit-loss", "balance-sheet", "gst-summary", "sales-forecast", "stock-risk"]
+}

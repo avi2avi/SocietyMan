@@ -5,7 +5,7 @@ import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 import "./styles.css";
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 const defaultSocietyForm = {
   name: "",
@@ -37,6 +37,7 @@ export default function App() {
   const [token, setToken] = useState(localStorage.getItem("sm_token") || "");
   const [user, setUser] = useState(null);
   const [dashboard, setDashboard] = useState(null);
+  const [erpOverview, setErpOverview] = useState(null);
   const [systemSummary, setSystemSummary] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminSocieties, setAdminSocieties] = useState([]);
@@ -63,6 +64,7 @@ export default function App() {
 
   useEffect(() => {
     loadSocieties();
+    loadErpOverview();
     if (window.location.pathname === "/admin") {
       setLoginMode("developer");
       setView("login");
@@ -125,6 +127,16 @@ export default function App() {
       setDashboard(res.data);
     } catch (error) {
       setDashboard(null);
+    }
+  };
+
+
+  const loadErpOverview = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/erp/capabilities`);
+      setErpOverview(res.data);
+    } catch (error) {
+      setErpOverview(null);
     }
   };
 
@@ -252,6 +264,7 @@ export default function App() {
       setSocietyForm(defaultSocietyForm);
       updateView("home");
       loadSocieties();
+    loadErpOverview();
     } catch (err) {
       setMessage(err.response?.data?.detail || "Failed to register society.");
     }
@@ -292,6 +305,7 @@ export default function App() {
       setDeveloperSocietyForm(defaultSocietyForm);
       fetchAdminOverview();
       loadSocieties();
+    loadErpOverview();
     } catch (err) {
       setMessage(err.response?.data?.detail || "Failed to create society.");
     }
@@ -430,6 +444,7 @@ export default function App() {
       setMessage("Society approved successfully.");
       fetchPendingLists();
       loadSocieties();
+    loadErpOverview();
       fetchAdminOverview();
     } catch (err) {
       setMessage(err.response?.data?.detail || "Failed to approve society.");
@@ -836,9 +851,9 @@ export default function App() {
     <div className="layout-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">SocietyMan</p>
-          <h1>Admin and Resident Portal</h1>
-          <p className="subtitle">Centralized society registration, resident onboarding, and admin KPI tracking.</p>
+          <p className="eyebrow">SocietyMan Enterprise ERP</p>
+          <h1>Billion-dollar SaaS ERP command center</h1>
+          <p className="subtitle">Multi-tenant operations, finance, HR, CRM, inventory, AI automation, workflows, and society management in one glassmorphism workspace.</p>
         </div>
         <nav className="topnav">
           {navItems.map((item) => (
@@ -885,21 +900,21 @@ export default function App() {
       <main className="page-content">
         <section className="hero-panel">
           <div className="hero-copy">
-            <h2>Delivering modern society administration with rich operational intelligence.</h2>
-            <p>Register a society, enroll residents, and use the admin portal to validate membership and monitor KPIs.</p>
+            <h2>Run every company workflow from one AI-powered enterprise cockpit.</h2>
+            <p>Launch secure tenant portals, automate approvals, monitor real-time KPIs, predict inventory and revenue, and deploy with Docker, Vercel, Render, or Railway.</p>
           </div>
           <div className="hero-cards">
             <article className="stat-card">
-              <span className="stat-label">Society registration</span>
-              <strong>Pre-register societies first</strong>
+              <span className="stat-label">Modules</span>
+              <strong>{erpOverview?.modules?.length || 14}+ ERP domains</strong>
             </article>
             <article className="stat-card">
-              <span className="stat-label">Resident onboarding</span>
-              <strong>Residents join only approved societies</strong>
+              <span className="stat-label">AI automation</span>
+              <strong>{erpOverview?.ai_automations?.length || 5} assistants and predictors</strong>
             </article>
             <article className="stat-card">
-              <span className="stat-label">Admin access</span>
-              <strong>Developer and society admin roles</strong>
+              <span className="stat-label">Deployment</span>
+              <strong>Docker, Vercel, Render, Railway</strong>
             </article>
           </div>
         </section>
@@ -947,6 +962,43 @@ export default function App() {
                 )) : <li>No approved societies available yet.</li>}
               </ol>
             </article>
+            {erpOverview && (
+              <article className="panel card-panel enterprise-showcase">
+                <div className="section-heading-row">
+                  <div>
+                    <p className="eyebrow">Enterprise blueprint</p>
+                    <h3>{erpOverview.platform}</h3>
+                  </div>
+                  <span className="status-pill">Production roadmap ready</span>
+                </div>
+                <div className="erp-module-grid">
+                  {erpOverview.modules.slice(0, 10).map((module) => (
+                    <div className="erp-module-card" key={module.key}>
+                      <span>{module.status}</span>
+                      <strong>{module.name}</strong>
+                      <p>{module.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )}
+            {erpOverview && (
+              <article className="panel card-panel ai-command-panel">
+                <div>
+                  <p className="eyebrow">AI command layer</p>
+                  <h3>Automation, prediction, OCR, and natural language reporting</h3>
+                </div>
+                <div className="ai-insight-list">
+                  {erpOverview.ai_automations.map((job) => (
+                    <div className="ai-insight-item" key={job.key}>
+                      <strong>{job.name}</strong>
+                      <p>{job.description}</p>
+                      <span>{Math.round(job.confidence_score * 100)}% confidence</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )}
           </section>
         )}
 

@@ -22,110 +22,110 @@ from app.schemas.dto import (
     WorkflowDefinitionRead,
 )
 
-router = APIRouter(prefix="/erp", tags=["Enterprise ERP"])
+router = APIRouter(prefix="/erp", tags=["Society ERP"])
 
 CORE_MODULES = [
     {
-        "key": "auth-security",
-        "name": "Authentication & Security",
-        "description": "JWT sessions, Google OAuth-ready identity, RBAC, 2FA, audit logs, device history, and IP monitoring.",
+        "key": "resident-unit-management",
+        "name": "Residents, Units & Tenants",
+        "description": "Society onboarding, towers/units, owners, tenants, families, move-in/move-out records, emergency contacts, and approval flows.",
         "status": "foundation",
-        "features": ["login", "register", "2fa", "email-verification", "password-reset", "audit-logs", "ip-monitoring"],
+        "features": ["society-onboarding", "unit-master", "owner-tenant-records", "move-in-out", "family-profiles", "resident-approvals"],
     },
     {
-        "key": "dashboard-ai",
-        "name": "Executive Dashboard",
-        "description": "Real-time KPIs, revenue charts, department overviews, custom widgets, and AI insights.",
-        "status": "demo-ready",
-        "features": ["realtime-analytics", "kpi-widgets", "ai-insights", "drag-drop-widgets", "dark-light-mode"],
-    },
-    {
-        "key": "hrm",
-        "name": "Human Resource Management",
-        "description": "Employee records, attendance, leave, payroll, recruitment, shifts, reviews, and self-service.",
-        "status": "scaffolded",
-        "features": ["employees", "attendance", "leave", "payroll", "recruitment", "performance", "shift-scheduling"],
-    },
-    {
-        "key": "crm",
-        "name": "Customer Relationship Management",
-        "description": "Lead pipeline, customer interactions, automated follow-ups, WhatsApp/email integration, and sales forecasts.",
-        "status": "scaffolded",
-        "features": ["leads", "pipeline", "contacts", "whatsapp", "email", "forecasting", "follow-ups"],
-    },
-    {
-        "key": "inventory",
-        "name": "Inventory & Warehouse",
-        "description": "Products, barcodes, stock transfers, purchase orders, suppliers, batches, expiry, and AI stock prediction.",
-        "status": "scaffolded",
-        "features": ["catalog", "barcode", "warehouses", "transfers", "alerts", "purchase-orders", "batch-expiry"],
-    },
-    {
-        "key": "finance",
-        "name": "Accounting & Finance",
-        "description": "Ledger, AP/AR, GST India support, invoices, expenses, reconciliation, tax reports, P&L, and balance sheet.",
+        "key": "gate-security",
+        "name": "Gate, Visitor & Security",
+        "description": "Visitor logs, QR/OTP entry, delivery tracking, gate pass management, guard workflows, and downloadable movement reports.",
         "status": "foundation",
-        "features": ["general-ledger", "ap-ar", "gst", "invoicing", "expenses", "reconciliation", "financial-statements"],
+        "features": ["visitor-entry-exit", "qr-otp", "delivery-log", "gate-passes", "guard-dashboard", "movement-reports"],
     },
     {
-        "key": "projects-manufacturing",
-        "name": "Projects & Manufacturing",
-        "description": "Kanban/Gantt, time tracking, collaboration, BOM, work orders, maintenance, quality checks, and production analytics.",
+        "key": "vehicle-parking",
+        "name": "Vehicle & Parking",
+        "description": "Resident vehicles, sticker numbers, parking slots, movement logs, and unauthorized vehicle tracking.",
+        "status": "api-ready",
+        "features": ["vehicle-master", "parking-slots", "stickers", "movement-log", "access-control"],
+    },
+    {
+        "key": "staff-daily-help",
+        "name": "Staff & Daily Help",
+        "description": "Service provider registration, ID proof, passcodes, departments, shifts, attendance, and daily help availability.",
+        "status": "api-ready",
+        "features": ["staff-master", "daily-help", "id-proof", "passcode", "attendance", "shift-roster"],
+    },
+    {
+        "key": "maintenance-billing-accounting",
+        "name": "Maintenance Billing & Accounting",
+        "description": "Auto bill generation, invoices, resident statements, dues, payments, ledgers, expenses, vendor bills, and audit reports.",
+        "status": "foundation",
+        "features": ["auto-billing", "resident-statements", "dues", "online-payments", "general-ledger", "vendor-expenses", "audit-reports"],
+    },
+    {
+        "key": "helpdesk-complaints",
+        "name": "Helpdesk & Complaints",
+        "description": "Category-wise resident complaints, photo evidence, assignment, status tracking, staff/vendor routing, and closure history.",
+        "status": "foundation",
+        "features": ["complaints", "categories", "photo-evidence", "assignment", "status-tracking", "resident-updates"],
+    },
+    {
+        "key": "amenities-facility-booking",
+        "name": "Amenities & Facility Booking",
+        "description": "Clubhouse and amenity bookings, slot availability, resident payments, booking status, and double-booking controls.",
+        "status": "api-ready",
+        "features": ["facility-booking", "slot-calendar", "resident-payments", "booking-rules", "availability"],
+    },
+    {
+        "key": "assets-inventory-procurement",
+        "name": "Assets, Inventory & Procurement",
+        "description": "Society assets, AMC reminders, inventory stock, reorder alerts, purchase requests, and approval hierarchy.",
+        "status": "api-ready",
+        "features": ["asset-master", "amc-reminders", "inventory", "reorder-alerts", "purchase-requests", "committee-approvals"],
+    },
+    {
+        "key": "communication-documents",
+        "name": "Communication & Documents",
+        "description": "Notices, email/WhatsApp updates, resident directory controls, society documents, agreements, and circulars.",
         "status": "scaffolded",
-        "features": ["kanban", "gantt", "time-tracking", "bom", "work-orders", "maintenance", "quality"],
+        "features": ["notices", "email", "whatsapp", "documents", "rental-agreements", "masked-directory"],
     },
     {
-        "key": "procurement-pos-commerce",
-        "name": "Procurement, POS & Commerce",
-        "description": "Vendors, RFQs, approval chains, offline POS, UPI/QR payments, receipts, and Shopify/Woo/Amazon sync.",
-        "status": "scaffolded",
-        "features": ["vendors", "rfq", "approvals", "offline-pos", "thermal-print", "upi", "commerce-sync"],
-    },
-    {
-        "key": "documents-communications",
-        "name": "Documents & Communications",
-        "description": "Cloud uploads, OCR, e-signatures, version history, internal chat, meetings, SMS/email/push notifications.",
-        "status": "scaffolded",
-        "features": ["uploads", "ocr", "digital-signatures", "versions", "chat", "video", "notifications"],
-    },
-    {
-        "key": "automation-reporting",
-        "name": "Automation & Reporting",
-        "description": "Workflow builder, approval chains, scheduled jobs, custom reports, PDF/Excel/CSV exports, and AI summaries.",
+        "key": "committee-compliance-reports",
+        "name": "Committee, Compliance & Reports",
+        "description": "Committee access controls, privacy/data requests, audit logs, CSV/PDF/XLSX reports, and operational dashboards.",
         "status": "demo-ready",
-        "features": ["workflow-builder", "approval-chains", "scheduled-jobs", "report-builder", "exports", "ai-summaries"],
+        "features": ["module-access", "privacy-events", "audit-log", "reports", "exports", "operations-dashboard"],
     },
 ]
 
 AI_AUTOMATIONS = [
     {
-        "key": "chatbot",
-        "name": "ERP AI Assistant",
-        "description": "Conversational assistant that can answer operational questions and draft actions for human approval.",
+        "key": "dues-reminder",
+        "name": "Maintenance Dues Reminder",
+        "description": "Identifies unpaid invoices and drafts resident email/WhatsApp reminders for committee approval.",
         "confidence_score": 0.94,
     },
     {
-        "key": "invoice-ocr",
-        "name": "Invoice OCR Scanner",
-        "description": "Extracts supplier, GSTIN, invoice lines, taxes, and due dates from uploaded invoices.",
+        "key": "vendor-invoice-review",
+        "name": "Vendor Invoice Review",
+        "description": "Flags duplicate vendor invoices, unusual expenses, and missing GST/TDS information before payment.",
         "confidence_score": 0.91,
     },
     {
-        "key": "sales-forecasting",
-        "name": "Sales Forecasting",
-        "description": "Predicts revenue and pipeline risk from CRM activity, seasonality, and historical conversion.",
+        "key": "complaint-routing",
+        "name": "Complaint Routing",
+        "description": "Suggests the right department, staff member, or vendor based on complaint category and workload.",
         "confidence_score": 0.88,
     },
     {
-        "key": "inventory-prediction",
-        "name": "Smart Inventory Prediction",
-        "description": "Recommends reorder points and identifies likely stock-outs before they affect fulfillment.",
+        "key": "inventory-reorder",
+        "name": "Society Inventory Reorder",
+        "description": "Recommends reorder quantities for security, housekeeping, electrical, plumbing, and maintenance stock.",
         "confidence_score": 0.9,
     },
     {
-        "key": "finance-anomaly",
-        "name": "Finance Anomaly Detection",
-        "description": "Flags duplicate payments, unusual ledger entries, margin drops, and reconciliation anomalies.",
+        "key": "amc-renewal",
+        "name": "AMC Renewal Watch",
+        "description": "Highlights assets with warranty or AMC expiry approaching in the next 30 days.",
         "confidence_score": 0.87,
     },
 ]
@@ -133,21 +133,21 @@ AI_AUTOMATIONS = [
 SAMPLE_WORKFLOWS = [
     {
         "key": "purchase-approval",
-        "name": "Purchase Approval Chain",
-        "trigger": "purchase_order.created",
-        "definition": "Request manager approval above ₹25,000, finance approval above ₹100,000, then notify procurement.",
+        "name": "Committee Purchase Approval",
+        "trigger": "purchase_request.created",
+        "definition": "Route purchase requests to the society committee, require higher approval above configured amount, then notify vendor/accounts.",
     },
     {
         "key": "invoice-follow-up",
-        "name": "Automated Invoice Follow-up",
+        "name": "Maintenance Dues Follow-up",
         "trigger": "invoice.overdue",
-        "definition": "Send email, WhatsApp reminder, and create a finance task when invoices are overdue by 7 days.",
+        "definition": "Send resident email/WhatsApp reminder and create a collection task when maintenance invoices are overdue by 7 days.",
     },
     {
-        "key": "inventory-reorder",
-        "name": "AI Inventory Reorder",
-        "trigger": "inventory.forecast_below_threshold",
-        "definition": "Generate supplier RFQ and route to warehouse manager for approval when forecasted stock is low.",
+        "key": "complaint-auto-assignment",
+        "name": "Complaint Auto Assignment",
+        "trigger": "ticket.created",
+        "definition": "Assign plumbing/electrical/security complaints to the right department and escalate when SLA is breached.",
     },
 ]
 
@@ -161,12 +161,12 @@ def get_capabilities() -> ERPSuiteOverview:
     """Public product blueprint used by the landing page and API documentation."""
 
     return ERPSuiteOverview(
-        platform="SocietyMan Enterprise ERP",
+        platform="SocietyMan Society ERP",
         architecture=[
-            "FastAPI REST API with OpenAPI/Swagger docs and WebSocket notification channel",
-            "React/Vite dashboard ready to migrate module-by-module to Next.js + TypeScript",
-            "PostgreSQL primary database with SQLite demo mode and Redis-ready caching hooks",
-            "RBAC, tenant scoping, audit trails, soft-delete fields, environment-based config, and Docker deployment",
+            "FastAPI REST API for society onboarding, residents, security, billing, helpdesk, amenities, staff, and committee workflows",
+            "React/Vite admin dashboard for developer admins, society admins, and module-level access control",
+            "PostgreSQL primary database with SQLite local compatibility, Redis-ready background jobs, and report exports",
+            "Society-scoped RBAC, approval trails, soft-delete capable records, SMTP/WhatsApp hooks, and Docker deployment",
         ],
         modules=[ERPSuiteCapability(**module) for module in CORE_MODULES],
         ai_automations=[AIAutomationJobRead(**job, status="ready", scheduled_for=datetime.utcnow()) for job in AI_AUTOMATIONS],
@@ -175,7 +175,8 @@ def get_capabilities() -> ERPSuiteOverview:
             IntegrationEndpointRead(id=1, name="Stripe Billing", provider="stripe", status="configured-by-env", webhook_url="/api/v1/payments/webhooks/stripe"),
             IntegrationEndpointRead(id=2, name="Razorpay + UPI", provider="razorpay", status="configured-by-env", webhook_url="/api/v1/payments/webhooks/razorpay"),
             IntegrationEndpointRead(id=3, name="WhatsApp Messaging", provider="meta/twilio/gupshup", status="configured-by-env", webhook_url="/api/v1/communications/whatsapp"),
-            IntegrationEndpointRead(id=4, name="Shopify/WooCommerce/Amazon", provider="commerce", status="planned", webhook_url="/api/v1/erp/integrations/commerce"),
+            IntegrationEndpointRead(id=4, name="SMTP Email", provider="smtp", status="configured-by-env", webhook_url="/api/v1/auth/login"),
+            IntegrationEndpointRead(id=5, name="Gate Hardware / QR Scanner", provider="security", status="planned", webhook_url="/api/v1/visitors/entry"),
         ],
         deployment_targets=["Docker Compose", "Vercel", "Render", "Railway", "GitHub Actions CI/CD"],
         security_controls=["OWASP headers", "rate limiting plan", "secure cookies", "RBAC", "CSRF-ready forms", "SQLAlchemy parameterization", "audit logs"],
@@ -258,22 +259,22 @@ def notification_center(current_user: User = Depends(get_current_user), db: Sess
 
 
 @router.post("/demo/seed")
-def seed_enterprise_demo(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def seed_society_demo(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != Role.ADMIN:
         raise HTTPException(status_code=403, detail="Developer admin access required")
 
-    tenant = db.query(Tenant).filter(Tenant.slug == "acme-global").first()
+    tenant = db.query(Tenant).filter(Tenant.slug == "green-heights-rwa").first()
     if not tenant:
-        tenant = Tenant(name="Acme Global Operations", slug="acme-global", region="IN", plan="enterprise")
+        tenant = Tenant(name="Green Heights RWA", slug="green-heights-rwa", region="IN", plan="society-pro")
         db.add(tenant)
         db.flush()
 
-    existing = db.query(ERPRecord).filter(ERPRecord.tenant_key == "platform", ERPRecord.module_key == "crm", ERPRecord.title == "Enterprise expansion opportunity").first()
+    existing = db.query(ERPRecord).filter(ERPRecord.tenant_key == "platform", ERPRecord.module_key == "helpdesk-complaints", ERPRecord.title == "Water leakage in Tower A").first()
     if not existing:
         demo_records = [
-            ERPRecord(tenant_key="platform", module_key="crm", record_type="lead", title="Enterprise expansion opportunity", status="qualified", payload_json='{"value": 1250000, "currency": "INR", "probability": 0.72}'),
-            ERPRecord(tenant_key="platform", module_key="inventory", record_type="stock_alert", title="Barcode scanners below reorder threshold", status="needs_action", payload_json='{"sku": "SCAN-900", "forecast_days_left": 11}'),
-            ERPRecord(tenant_key="platform", module_key="finance", record_type="anomaly", title="Duplicate supplier invoice detected", status="review", payload_json='{"supplier": "Northwind Traders", "risk": "high"}'),
+            ERPRecord(tenant_key="platform", module_key="helpdesk-complaints", record_type="ticket", title="Water leakage in Tower A", status="in_progress", payload_json='{"category": "plumbing", "priority": "high"}'),
+            ERPRecord(tenant_key="platform", module_key="assets-inventory-procurement", record_type="stock_alert", title="Security register books below reorder threshold", status="needs_action", payload_json='{"sku": "SEC-REG-01", "quantity": 3, "min_quantity": 10}'),
+            ERPRecord(tenant_key="platform", module_key="maintenance-billing-accounting", record_type="dues_alert", title="12 flats have overdue maintenance", status="review", payload_json='{"amount": 86000, "currency": "INR"}'),
         ]
         db.add_all(demo_records)
 
@@ -284,18 +285,18 @@ def seed_enterprise_demo(current_user: User = Depends(get_current_user), db: Ses
         if not db.query(WorkflowDefinition).filter(WorkflowDefinition.key == workflow["key"]).first():
             db.add(WorkflowDefinition(**workflow, tenant_key="platform"))
 
-    db.add(Notification(user_id=current_user.id, tenant_key="platform", title="Enterprise demo seeded", body="CRM, inventory, finance, AI, and workflow demo records are ready.", channel="in-app"))
+    db.add(Notification(user_id=current_user.id, tenant_key="platform", title="Society demo seeded", body="Helpdesk, inventory, billing, AI, and committee workflow demo records are ready.", channel="in-app"))
     db.commit()
-    return {"status": "ok", "message": "Enterprise ERP demo data seeded"}
+    return {"status": "ok", "message": "Society ERP demo data seeded"}
 
 
 @router.websocket("/ws/notifications/{user_id}")
 async def notification_socket(websocket: WebSocket, user_id: int):
     await websocket.accept()
     try:
-        await websocket.send_json({"type": "connected", "user_id": user_id, "message": "Realtime ERP notification channel connected"})
+        await websocket.send_json({"type": "connected", "user_id": user_id, "message": "Realtime society notification channel connected"})
         while True:
             await websocket.receive_text()
-            await websocket.send_json({"type": "heartbeat", "message": "SocietyMan ERP realtime channel is alive"})
+            await websocket.send_json({"type": "heartbeat", "message": "SocietyMan realtime channel is alive"})
     except WebSocketDisconnect:
         return

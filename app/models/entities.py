@@ -157,6 +157,149 @@ class VendorInvoice(Base):
     description: Mapped[str | None] = mapped_column(Text)
 
 
+class Asset(Base):
+    __tablename__ = "assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    category: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    location: Mapped[str] = mapped_column(String(160), nullable=False)
+    vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id"), nullable=True)
+    manufacturer: Mapped[str | None] = mapped_column(String(120))
+    model_number: Mapped[str | None] = mapped_column(String(120))
+    purchase_value: Mapped[float] = mapped_column(Float, default=0)
+    installed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    warranty_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    amc_expires_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    maintenance_cycle_days: Mapped[int] = mapped_column(Integer, default=90)
+    status: Mapped[str] = mapped_column(String(40), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class InventoryItem(Base):
+    __tablename__ = "inventory_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    sku: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    location: Mapped[str] = mapped_column(String(160), default="main store")
+    quantity: Mapped[float] = mapped_column(Float, default=0)
+    min_quantity: Mapped[float] = mapped_column(Float, default=0)
+    unit_cost: Mapped[float] = mapped_column(Float, default=0)
+    vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class StaffMember(Base):
+    __tablename__ = "staff_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    phone: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    department: Mapped[str | None] = mapped_column(String(80))
+    shift_name: Mapped[str | None] = mapped_column(String(80))
+    id_proof_type: Mapped[str | None] = mapped_column(String(80))
+    id_proof_number: Mapped[str | None] = mapped_column(String(120))
+    passcode: Mapped[str | None] = mapped_column(String(12))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class StaffAttendance(Base):
+    __tablename__ = "staff_attendance"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    staff_member_id: Mapped[int] = mapped_column(ForeignKey("staff_members.id"), nullable=False, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    check_in_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    check_out_at: Mapped[datetime | None] = mapped_column(DateTime)
+    status: Mapped[str] = mapped_column(String(40), default="present", index=True)
+
+
+class Vehicle(Base):
+    __tablename__ = "vehicles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    unit_id: Mapped[int | None] = mapped_column(ForeignKey("units.id"), nullable=True, index=True)
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    registration_number: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    vehicle_type: Mapped[str] = mapped_column(String(40), default="car")
+    sticker_number: Mapped[str | None] = mapped_column(String(80))
+    parking_slot: Mapped[str | None] = mapped_column(String(80))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class GatePass(Base):
+    __tablename__ = "gate_passes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    issued_to_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    issued_to_phone: Mapped[str | None] = mapped_column(String(20))
+    pass_type: Mapped[str] = mapped_column(String(60), default="material")
+    purpose: Mapped[str | None] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(40), default="issued", index=True)
+    valid_from: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PurchaseRequest(Base):
+    __tablename__ = "purchase_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    requested_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    amount: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
+    approval_level: Mapped[str] = mapped_column(String(60), default="committee")
+    approved_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AmenityBooking(Base):
+    __tablename__ = "amenity_bookings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    amenity_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    unit_id: Mapped[int | None] = mapped_column(ForeignKey("units.id"), nullable=True)
+    resident_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    amount: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(40), default="booked", index=True)
+    payment_status: Mapped[str] = mapped_column(String(40), default="unpaid", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ComplianceEvent(Base):
+    __tablename__ = "compliance_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="open", index=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class Ticket(Base):
     __tablename__ = "tickets"
 

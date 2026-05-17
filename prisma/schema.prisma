@@ -141,3 +141,161 @@ model IntegrationEndpoint {
 
   @@index([tenantId, provider, status])
 }
+
+model Asset {
+  id                   String    @id @default(uuid())
+  tenantId             String
+  societyId            String
+  name                 String
+  category             String
+  location             String
+  vendorId             String?
+  manufacturer         String?
+  modelNumber          String?
+  purchaseValue        Decimal   @default(0)
+  installedAt          DateTime?
+  warrantyExpiresAt    DateTime?
+  amcExpiresAt         DateTime?
+  maintenanceCycleDays Int       @default(90)
+  status               String    @default("active")
+  createdAt            DateTime  @default(now())
+
+  @@index([tenantId, societyId, category, status])
+  @@index([amcExpiresAt])
+}
+
+model InventoryItem {
+  id          String   @id @default(uuid())
+  tenantId    String
+  societyId   String
+  name        String
+  sku         String
+  category    String
+  location    String   @default("main store")
+  quantity    Decimal  @default(0)
+  minQuantity Decimal  @default(0)
+  unitCost    Decimal  @default(0)
+  vendorId    String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, societyId, category])
+  @@index([sku])
+}
+
+model StaffMember {
+  id            String   @id @default(uuid())
+  tenantId      String
+  societyId     String
+  fullName      String
+  phone         String
+  role          String
+  department    String?
+  shiftName     String?
+  idProofType   String?
+  idProofNumber String?
+  passcode      String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, societyId, role, isActive])
+  @@index([phone])
+}
+
+model StaffAttendance {
+  id            String    @id @default(uuid())
+  tenantId      String
+  societyId     String
+  staffMemberId String
+  checkInAt     DateTime  @default(now())
+  checkOutAt    DateTime?
+  status        String    @default("present")
+
+  @@index([tenantId, societyId, checkInAt, checkOutAt])
+}
+
+model Vehicle {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  societyId          String
+  unitId             String?
+  ownerUserId        String?
+  registrationNumber String
+  vehicleType        String   @default("car")
+  stickerNumber      String?
+  parkingSlot        String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  @@index([tenantId, societyId, isActive])
+  @@index([registrationNumber])
+}
+
+model GatePass {
+  id              String    @id @default(uuid())
+  tenantId        String
+  societyId       String
+  issuedToName    String
+  issuedToPhone   String?
+  passType        String    @default("material")
+  purpose         String?
+  status          String    @default("issued")
+  validFrom       DateTime  @default(now())
+  validUntil      DateTime?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+
+  @@index([tenantId, societyId, status, validFrom])
+}
+
+model PurchaseRequest {
+  id                String    @id @default(uuid())
+  tenantId          String
+  societyId         String
+  requestedByUserId String
+  vendorId          String?
+  title             String
+  description       String?
+  amount            Decimal   @default(0)
+  status            String    @default("pending")
+  approvalLevel     String    @default("committee")
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([tenantId, societyId, status, createdAt])
+}
+
+model AmenityBooking {
+  id             String   @id @default(uuid())
+  tenantId       String
+  societyId      String
+  amenityName    String
+  unitId         String?
+  residentUserId String
+  startsAt       DateTime
+  endsAt         DateTime
+  amount         Decimal  @default(0)
+  status         String   @default("booked")
+  paymentStatus  String   @default("unpaid")
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, societyId, amenityName, startsAt])
+  @@index([residentUserId, startsAt])
+}
+
+model ComplianceEvent {
+  id          String    @id @default(uuid())
+  tenantId    String
+  societyId   String
+  eventType   String
+  title       String
+  description String?
+  status      String    @default("open")
+  dueAt       DateTime?
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, societyId, eventType, status])
+  @@index([dueAt])
+}

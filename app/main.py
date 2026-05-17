@@ -5,9 +5,12 @@ from sqlalchemy import inspect, text
 from app.api.routes import (
     auth,
     billing,
+    billing_advanced,
     communications,
+    community,
     dashboard,
     erp,
+    operations,
     payments,
     reports,
     residents,
@@ -25,6 +28,16 @@ from app.core.security import hash_password
 from app.models.entities import User
 
 
+def _sql_type(sqlite_type: str, postgres_type: str) -> str:
+    return postgres_type if engine.dialect.name == "postgresql" else sqlite_type
+
+
+def _boolean_default(enabled: bool) -> str:
+    if engine.dialect.name == "postgresql":
+        return "TRUE" if enabled else "FALSE"
+    return "1" if enabled else "0"
+
+
 def ensure_schema():
     with engine.connect() as connection:
         inspector = inspect(connection)
@@ -34,13 +47,13 @@ def ensure_schema():
                 connection.execute(text("ALTER TABLE users ADD COLUMN society_id INTEGER"))
                 connection.commit()
             if "password_change_required" not in columns:
-                connection.execute(text("ALTER TABLE users ADD COLUMN password_change_required BOOLEAN DEFAULT 0"))
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN password_change_required BOOLEAN DEFAULT {_boolean_default(False)}"))
                 connection.commit()
             if "admin_login_code" not in columns:
                 connection.execute(text("ALTER TABLE users ADD COLUMN admin_login_code VARCHAR(20)"))
                 connection.commit()
             if "admin_login_code_expires_at" not in columns:
-                connection.execute(text("ALTER TABLE users ADD COLUMN admin_login_code_expires_at DATETIME"))
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN admin_login_code_expires_at {_sql_type('DATETIME', 'TIMESTAMP')}"))
                 connection.commit()
             for column_name in [
                 "access_erp",
@@ -53,7 +66,7 @@ def ensure_schema():
                 "access_visitor_management",
             ]:
                 if column_name not in columns:
-                    connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} BOOLEAN DEFAULT 0"))
+                    connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} BOOLEAN DEFAULT {_boolean_default(False)}"))
                     connection.commit()
         if "societies" in inspector.get_table_names():
             columns = [column["name"] for column in inspector.get_columns("societies")]
@@ -67,10 +80,10 @@ def ensure_schema():
                 connection.execute(text("ALTER TABLE societies ADD COLUMN admin_contact_phone VARCHAR(20)"))
                 connection.commit()
             if "is_approved" not in columns:
-                connection.execute(text("ALTER TABLE societies ADD COLUMN is_approved BOOLEAN DEFAULT 1"))
+                connection.execute(text(f"ALTER TABLE societies ADD COLUMN is_approved BOOLEAN DEFAULT {_boolean_default(True)}"))
                 connection.commit()
             if "approved_at" not in columns:
-                connection.execute(text("ALTER TABLE societies ADD COLUMN approved_at DATETIME"))
+                connection.execute(text(f"ALTER TABLE societies ADD COLUMN approved_at {_sql_type('DATETIME', 'TIMESTAMP')}"))
                 connection.commit()
 
 
@@ -134,8 +147,11 @@ app.include_router(vendors.router, prefix=settings.api_prefix)
 app.include_router(tickets.router, prefix=settings.api_prefix)
 app.include_router(dashboard.router, prefix=settings.api_prefix)
 app.include_router(erp.router, prefix=settings.api_prefix)
+app.include_router(operations.router, prefix=settings.api_prefix)
 app.include_router(reports.router, prefix=settings.api_prefix)
 app.include_router(communications.router, prefix=settings.api_prefix)
+app.include_router(billing_advanced.router, prefix=settings.api_prefix)
+app.include_router(community.router, prefix=settings.api_prefix)
 
 
 @app.get("/")

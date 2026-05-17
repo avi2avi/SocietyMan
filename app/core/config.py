@@ -1,13 +1,35 @@
 import os
+from pathlib import Path
 
 from pydantic import BaseModel
+
+DEFAULT_POSTGRES_URL = "postgresql+psycopg://societyman:societyman@localhost:5432/societyman"
+
+
+def _load_local_env() -> None:
+    env_path = Path(".env")
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_local_env()
 
 
 class Settings(BaseModel):
     app_name: str = os.getenv("APP_NAME", "SocietyMan API")
     api_prefix: str = os.getenv("API_PREFIX", "/api/v1")
     cors_allow_origins: str = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000")
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./societyman.db")
+    database_url: str = os.getenv("DATABASE_URL", os.getenv("POSTGRES_DATABASE_URL", DEFAULT_POSTGRES_URL))
     secret_key: str = os.getenv("SECRET_KEY", "change-me-in-production")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")    
     access_token_expiry_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRY_MINUTES", "30"))

@@ -12,8 +12,11 @@ from app.models.entities import (
     Invoice,
     Payment,
     Ticket,
+    Unit,
+    ResidentProfile,
     VendorInvoice,
     VisitorLog,
+    GatePass,
     User,
     Society,
     Vendor,
@@ -81,6 +84,102 @@ def admin_summary(
     }
 
 
+@router.get("/admin/units")
+def admin_units(
+    current_role: Role = Depends(get_current_role),
+    db: Session = Depends(get_db),
+):
+    if current_role != Role.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    total_units = db.query(func.count(Unit.id)).scalar()
+    total_resident_profiles = db.query(func.count(ResidentProfile.id)).scalar()
+    total_residents = db.query(func.count(User.id)).filter(User.role == Role.RESIDENT).scalar()
+    occupied_units = total_resident_profiles
+    unoccupied_units = max(total_units - occupied_units, 0)
+
+    return {
+        "total_units": total_units,
+        "occupied_units": occupied_units,
+        "unoccupied_units": unoccupied_units,
+        "total_residents": total_residents,
+    }
+
+
+@router.get("/admin/ledger")
+def admin_ledger(
+    current_role: Role = Depends(get_current_role),
+    db: Session = Depends(get_db),
+):
+    if current_role != Role.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    total_income = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).scalar()
+    pending_dues = db.query(func.coalesce(func.sum(Invoice.total_amount), 0.0)).filter(Invoice.status == "unpaid").scalar()
+    vendor_payables = db.query(func.coalesce(func.sum(VendorInvoice.amount), 0.0)).filter(VendorInvoice.status != "paid").scalar()
+    vendor_expenses = db.query(func.coalesce(func.sum(VendorInvoice.amount), 0.0)).scalar()
+    bank_cash = total_income - vendor_payables
+    ledger_balance = total_income - vendor_expenses
+    utility_spend = db.query(func.coalesce(func.sum(VendorInvoice.amount), 0.0)).filter(VendorInvoice.description.ilike("%utility%",)).scalar()
+    vendor_invoices = db.query(func.count(VendorInvoice.id)).scalar()
+
+    return {
+        "total_income": total_income,
+        "pending_dues": pending_dues,
+        "vendor_payables": vendor_payables,
+        "vendor_expenses": vendor_expenses,
+        "bank_cash": bank_cash,
+        "ledger_balance": ledger_balance,
+        "utility_spend": utility_spend,
+        "vendor_invoices": vendor_invoices,
+    }
+
+
+@router.get("/admin/tickets")
+def admin_tickets(
+    current_role: Role = Depends(get_current_role),
+    db: Session = Depends(get_db),
+):
+    if current_role != Role.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    tickets = db.query(Ticket).order_by(Ticket.created_at.desc()).limit(200).all()
+    results = []
+    for ticket in tickets:
+        resident = db.get(User, ticket.resident_user_id)
+        vendor = db.get(Vendor, ticket.assigned_vendor_id) if ticket.assigned_vendor_id else None
+        results.append(
+            {
+                "id": ticket.id,
+                "title": ticket.title,
+                "description": ticket.description,
+                "status": ticket.status.value if hasattr(ticket.status, "value") else str(ticket.status),
+                "assigned_vendor": vendor.name if vendor else None,
+                "resident_name": resident.full_name if resident else None,
+                "created_at": ticket.created_at.isoformat(),
+            }
+        )
+
+    return results
+
+
+@router.get("/admin/gatekeeper")
+def admin_gatekeeper(
+    current_role: Role = Depends(get_current_role),
+    db: Session = Depends(get_db),
+):
+    if current_role != Role.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    visitors_today = db.query(func.count(VisitorLog.id)).scalar()
+    active_gate_passes = db.query(func.count(GatePass.id)).filter(GatePass.status == "issued").scalar()
+    return {
+        "visitors_today": visitors_today,
+        "active_gate_passes": active_gate_passes,
+        "open_tickets": db.query(func.count(Ticket.id)).filter(Ticket.status != "resolved").scalar(),
+    }
+
+
 @router.get("/admin/users")
 def admin_users(
     current_role: Role = Depends(get_current_role),
@@ -140,7 +239,13 @@ def admin_db_info(
     if current_role != Role.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     db_url = settings.database_url
-    info = {"database_type": "sqlite" if db_url.startswith("sqlite") else "database"}
+    if db_url.startswith("sqlite"):
+        database_type = "sqlite"
+    elif db_url.startswith("postgresql"):
+        database_type = "postgresql"
+    else:
+        database_type = "database"
+    info = {"database_type": database_type}
     if db_url.startswith("sqlite"):
         info["database_file"] = db_url.replace("sqlite:///", "")
     else:

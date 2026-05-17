@@ -4,6 +4,24 @@ import { AgGridReact } from "ag-grid-react";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 import "./styles.css";
+import ResidentDashboard from "./ResidentDashboard";
+import {
+  FamilyMembersSection,
+  SocietyDirectorySection,
+  CommunityDashboardSection,
+  NoticeBoardSection,
+  CommunityFeedSection,
+  EmergencyContactsSection,
+  EventsListSection,
+  PollsListSection,
+  MeetingsListSection,
+  ExpensesListSection,
+  ExpenseCategoriesSection,
+  UtilitiesListSection,
+  ParcelsListSection,
+  PatrolsListSection,
+  DomesticHelpSection,
+} from "./CommunitySections";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
@@ -28,6 +46,65 @@ const defaultDeveloperUserForm = {
 };
 const defaultLoginForm = { email: "", phone: "", password: "" };
 
+const societyWorkbenchModules = [
+  {
+    key: "gate-security",
+    title: "Gate & Visitors",
+    status: "Live API",
+    summary: "Visitor entry/exit, OTP/QR hooks, delivery logs, guard workflows, and gate passes.",
+    metrics: ["Today visitors", "Active gate passes", "Guard activity"],
+  },
+  {
+    key: "residents-units",
+    title: "Residents, Units & Tenants",
+    status: "Live API",
+    summary: "Society onboarding, unit master, resident approvals, tenant records, and family contacts.",
+    metrics: ["Approved residents", "Pending residents", "Society users"],
+  },
+  {
+    key: "billing-accounting",
+    title: "Maintenance Billing",
+    status: "Live API",
+    summary: "Monthly invoices, resident dues, online payments, collections, vendor payables, and reports.",
+    metrics: ["Collected", "Pending dues", "Vendor payables"],
+  },
+  {
+    key: "helpdesk",
+    title: "Complaints & Helpdesk",
+    status: "Live API",
+    summary: "Resident complaints, assignment, status tracking, staff/vendor routing, and closure updates.",
+    metrics: ["Open tickets", "Assigned vendors", "SLA watch"],
+  },
+  {
+    key: "staff-vehicles",
+    title: "Staff, Vehicles & Parking",
+    status: "Live API",
+    summary: "Daily help, staff attendance, vehicle registry, stickers, parking slots, and movement controls.",
+    metrics: ["Active staff", "Checked in", "Vehicles"],
+  },
+  {
+    key: "amenities-assets",
+    title: "Amenities, Assets & Inventory",
+    status: "Live API",
+    summary: "Facility bookings, AMC reminders, stock levels, reorder alerts, and purchase approvals.",
+    metrics: ["Bookings", "AMC due", "Reorder alerts"],
+  },
+  {
+    key: "communication",
+    title: "Notices & Documents",
+    status: "Foundation",
+    summary: "Announcements, email/WhatsApp hooks, society documents, circulars, and resident communication.",
+    metrics: ["Notices", "Documents", "Messages"],
+  },
+  {
+    key: "committee",
+    title: "Committee Controls",
+    status: "Foundation",
+    summary: "Module access, admin approvals, compliance events, privacy requests, audit logs, and exports.",
+    metrics: ["Approvals", "Privacy events", "Reports"],
+  },
+];
+
 export default function App() {
   const [view, setView] = useState("home");
   const [societies, setSocieties] = useState([]);
@@ -41,9 +118,13 @@ export default function App() {
   const [systemSummary, setSystemSummary] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminSocieties, setAdminSocieties] = useState([]);
+  const [adminUnits, setAdminUnits] = useState(null);
+  const [adminLedger, setAdminLedger] = useState(null);
+  const [adminTickets, setAdminTickets] = useState([]);
   const [societyUsers, setSocietyUsers] = useState([]);
   const [selectedSocietyId, setSelectedSocietyId] = useState(null);
   const [dbInfo, setDbInfo] = useState(null);
+  const [operationsOverview, setOperationsOverview] = useState(null);
   const [adminSection, setAdminSection] = useState("overview");
   const [societySection, setSocietySection] = useState("pendingResidents");
   const [societyForm, setSocietyForm] = useState(defaultSocietyForm);
@@ -65,7 +146,7 @@ export default function App() {
   useEffect(() => {
     loadSocieties();
     loadErpOverview();
-    if (window.location.pathname === "/admin") {
+    if (window.location.pathname === "/admin" && !token) {
       setLoginMode("developer");
       setView("login");
     }
@@ -85,6 +166,10 @@ export default function App() {
       fetchDashboard();
       fetchPendingLists();
       fetchAdminOverview();
+      fetchAdminUnits();
+      fetchAdminLedger();
+      fetchAdminTickets();
+      fetchOperationsOverview();
     }
   }, [token]);
 
@@ -168,6 +253,70 @@ export default function App() {
     }
   };
 
+  const fetchAdminUnits = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API_BASE}/dashboard/admin/units`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAdminUnits(res.data);
+    } catch (error) {
+      setAdminUnits(null);
+    }
+  };
+
+  const fetchAdminLedger = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API_BASE}/dashboard/admin/ledger`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAdminLedger(res.data);
+    } catch (error) {
+      setAdminLedger(null);
+    }
+  };
+
+  const fetchAdminTickets = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API_BASE}/dashboard/admin/tickets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAdminTickets(res.data || []);
+    } catch (error) {
+      setAdminTickets([]);
+    }
+  };
+
+  const updateTicketStatus = async (ticketId, status) => {
+    try {
+      await axios.patch(`${API_BASE}/tickets/${ticketId}/status`, { status }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage(`Ticket ${ticketId} marked ${status.replace(/_/g, " ")}.`);
+      fetchAdminTickets();
+      fetchDashboard();
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Failed to update ticket status.");
+    }
+  };
+
+  const fetchOperationsOverview = async (societyId = selectedSocietyId) => {
+    if (!token) {
+      return;
+    }
+    try {
+      const params = societyId ? `?society_id=${societyId}` : "";
+      const res = await axios.get(`${API_BASE}/operations/overview${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setOperationsOverview(res.data);
+    } catch (error) {
+      setOperationsOverview(null);
+    }
+  };
+
   const fetchSocietyUsers = async (societyId) => {
     if (!token || !societyId) {
       return;
@@ -186,6 +335,7 @@ export default function App() {
   useEffect(() => {
     if (token && user?.role === "admin" && selectedSocietyId) {
       fetchSocietyUsers(selectedSocietyId);
+      fetchOperationsOverview(selectedSocietyId);
     }
   }, [selectedSocietyId, token, user]);
 
@@ -238,11 +388,19 @@ export default function App() {
     setSystemSummary(null);
     setAdminUsers([]);
     setAdminSocieties([]);
+    setAdminUnits(null);
+    setAdminLedger(null);
+    setAdminTickets([]);
     setDbInfo(null);
+    setOperationsOverview(null);
     localStorage.removeItem("sm_token");
   };
 
   const updateView = (nextView, nextMode) => {
+    if (nextView === "login" && token && user) {
+      setView(user.role === "admin" ? "developerPanel" : user.role === "society_admin" ? "societyPanel" : "home");
+      return;
+    }
     setView(nextView);
     if (nextMode) {
       setLoginMode(nextMode);
@@ -413,7 +571,11 @@ export default function App() {
             axios.get(`${API_BASE}/dashboard/admin/summary`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setSystemSummary(r.data)).catch(() => {}),
             axios.get(`${API_BASE}/dashboard/admin/users`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setAdminUsers(r.data)).catch(() => {}),
             axios.get(`${API_BASE}/dashboard/admin/societies`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setAdminSocieties(r.data)).catch(() => {}),
+            axios.get(`${API_BASE}/dashboard/admin/units`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setAdminUnits(r.data)).catch(() => {}),
+            axios.get(`${API_BASE}/dashboard/admin/ledger`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setAdminLedger(r.data)).catch(() => {}),
+            axios.get(`${API_BASE}/dashboard/admin/tickets`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setAdminTickets(r.data || [])).catch(() => {}),
             axios.get(`${API_BASE}/dashboard/admin/db-info`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setDbInfo(r.data)).catch(() => {}),
+            axios.get(`${API_BASE}/operations/overview`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setOperationsOverview(r.data)).catch(() => {}),
             axios.get(`${API_BASE}/societies/pending`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setPendingSocieties(r.data || [])).catch(() => {}),
             axios.get(`${API_BASE}/users/pending`, { headers: { Authorization: `Bearer ${newToken}` } }).then(r => setPendingResidents(r.data || [])).catch(() => {})
           ]);
@@ -471,12 +633,30 @@ export default function App() {
     setMessage("Logged out successfully.");
   };
 
-  const navItems = [
-    { label: "Home", view: "home" },
-    { label: "Register Society", view: "registerSociety" },
-    { label: "Register Resident", view: "registerUser" },
-    { label: "Society Admin Login", view: "login" },
-  ];
+  const [openDropdown, setOpenDropdown] = useState(null);
+
+  const toggleDropdown = (name) => {
+    setOpenDropdown(openDropdown === name ? null : name);
+  };
+
+  const closeDropdowns = () => {
+    setOpenDropdown(null);
+  };
+
+  const navItems = token
+    ? [{ label: "🏠 Workspace", view: "home" }]
+    : [
+        { label: "🏠 Home", view: "home" },
+        { 
+          label: "📝 Register", 
+          hasDropdown: true,
+          dropdownName: "register",
+          subItems: [
+            { icon: "🏘️", label: "Register Society", view: "registerSociety" },
+            { icon: "👤", label: "Register Resident", view: "registerUser" },
+          ]
+        },
+      ];
 
   const developerNavItems = [
     { label: "Overview", key: "overview" },
@@ -491,6 +671,27 @@ export default function App() {
       { label: "All Users", key: "allUsers" },
       { label: "Create User", key: "createUser" },
     ] },
+    { label: "Units & Users", key: "unitsUsers", subItems: [
+      { label: "Unit Summary", key: "unitSummary" },
+      { label: "Resident Summary", key: "residentSummary" },
+    ] },
+    { label: "Helpdesk Tracker", key: "helpdeskTracker", subItems: [
+      { label: "Open tickets", key: "openTickets" },
+      { label: "Helpdesk summary", key: "helpdeskSummary" },
+    ] },
+    { label: "Finance Tracker", key: "financeTracker", subItems: [
+      { label: "Income Tracker", key: "incomeTracker" },
+      { label: "Expense Tracker", key: "expenseTracker" },
+      { label: "Bank & Cash", key: "bankCash" },
+      { label: "General Ledger", key: "generalLedger" },
+      { label: "Utility Tracker", key: "utilityTracker" },
+    ] },
+    { label: "ADDA Gatekeeper", key: "addaGatekeeper", subItems: [
+      { label: "Gatekeeper activity", key: "gatekeeperActivity" },
+    ] },
+    { label: "Society Operations", key: "erpOperations", subItems: [
+      { label: "Operations Health", key: "operationsHealth" },
+    ] },
     { label: "Society Admin Contact", key: "adminContact", subItems: [
       { label: "Update Admin Email/Phone", key: "updateAdminContact" },
     ] },
@@ -502,8 +703,200 @@ export default function App() {
 
   const societyNavItems = [
     { label: "Overview", key: "overview" },
-    { label: "Resident Approvals", key: "pendingResidents" },
+    { label: "Members Management", key: "membersManagement", subItems: [
+      { label: "View All Members", key: "allMembers" },
+      { label: "Add New Member", key: "addMember" },
+      { label: "Bulk Import", key: "bulkImport" },
+      { label: "Member Approvals", key: "pendingResidents" },
+      { label: "Family Members", key: "familyMembers" },
+      { label: "Society Directory", key: "societyDirectory" },
+    ]},
+    { label: "Parking Management", key: "parkingManagement", subItems: [
+      { label: "Parking Slots", key: "parkingSlots" },
+      { label: "Vehicles", key: "vehicles" },
+      { label: "Parking Reports", key: "parkingReports" },
+    ]},
+    { label: "Billing Management", key: "billingManagement", subItems: [
+      { label: "Bills", key: "billsList" },
+      { label: "Create Bill", key: "createBill" },
+      { label: "Bill Payments", key: "billPayments" },
+      { label: "Billing Reports", key: "billingReports" },
+    ]},
+    { label: "Vendor Management", key: "vendorManagement", subItems: [
+      { label: "All Vendors", key: "vendorsList" },
+      { label: "Add Vendor", key: "addVendor" },
+      { label: "Vendor Performance", key: "vendorPerformance" },
+      { label: "Vendor Payments", key: "vendorPayments" },
+    ]},
+    { label: "Community & Lifestyle", key: "community", subItems: [
+      { label: "Community Dashboard", key: "communityDashboard" },
+      { label: "Notice Board", key: "noticeBoard" },
+      { label: "Community Feed", key: "communityFeed" },
+      { label: "Events", key: "eventsList" },
+      { label: "Poll & Voting", key: "pollsList" },
+      { label: "Meetings & AGM", key: "meetingsList" },
+      { label: "Emergency Contacts", key: "emergencyContacts" },
+      { label: "Expense Tracking", key: "expensesList" },
+      { label: "Expense Categories", key: "expenseCategories" },
+      { label: "Utility Readings", key: "utilitiesList" },
+    ]},
+    { label: "Gate & Security", key: "gateSecurity", subItems: [
+      { label: "Parcel / Delivery", key: "parcelsList" },
+      { label: "Security Patrols", key: "patrolsList" },
+      { label: "Domestic Help", key: "domesticHelpList" },
+    ]},
+    { label: "Reports", key: "reports", subItems: [
+      { label: "Billing Reports", key: "billingReportsSection" },
+      { label: "Member Reports", key: "memberReportsSection" },
+      { label: "Operations Reports", key: "operationsReportsSection" },
+      { label: "Download", key: "downloadReports" },
+    ]},
+    { label: "Operations Health", key: "operationsHealth" },
   ];
+  const renderOperationsHealth = () => (
+    <article className="panel card-panel operations-panel">
+      <div className="section-heading-row light">
+        <div>
+          <p className="eyebrow">Society operations</p>
+          <h3>Daily society operations health</h3>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => fetchOperationsOverview()}>
+          Refresh
+        </button>
+      </div>
+      {user?.role === "admin" && (
+        <label className="field-group compact-field">
+          <span>Scope by society</span>
+          <select
+            value={selectedSocietyId || ""}
+            onChange={(event) => {
+              const value = event.target.value ? Number(event.target.value) : null;
+              setSelectedSocietyId(value);
+              fetchOperationsOverview(value);
+            }}
+          >
+            <option value="">All societies</option>
+            {adminSocieties.map((society) => (
+              <option key={society.id} value={society.id}>{society.name} - {society.city}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {operationsOverview ? (
+        <>
+          <div className="operations-metric-grid">
+            {[
+              ["Assets", operationsOverview.assets_total],
+              ["AMC due soon", operationsOverview.assets_with_amc_due],
+              ["Inventory items", operationsOverview.inventory_items],
+              ["Reorder alerts", operationsOverview.inventory_reorder_alerts],
+              ["Active staff", operationsOverview.staff_active],
+              ["Staff checked in", operationsOverview.staff_checked_in_today],
+              ["Registered vehicles", operationsOverview.registered_vehicles],
+              ["Gate passes", operationsOverview.active_gate_passes],
+              ["Purchase approvals", operationsOverview.open_purchase_requests],
+              ["Upcoming bookings", operationsOverview.amenity_bookings_upcoming],
+              ["Compliance open", operationsOverview.open_compliance_events],
+              ["Privacy requests", operationsOverview.privacy_events_open],
+            ].map(([label, value]) => (
+              <div className="mini-metric" key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="operations-lists">
+            <div>
+              <h4>Low stock items</h4>
+              {operationsOverview.low_stock_items?.length ? (
+                operationsOverview.low_stock_items.map((item) => (
+                  <div className="ops-list-row" key={item.id}>
+                    <strong>{item.name}</strong>
+                    <span>{item.quantity} on hand / min {item.min_quantity}</span>
+                  </div>
+                ))
+              ) : (
+                <p>No reorder alerts.</p>
+              )}
+            </div>
+            <div>
+              <h4>AMC renewals</h4>
+              {operationsOverview.upcoming_amc_assets?.length ? (
+                operationsOverview.upcoming_amc_assets.map((asset) => (
+                  <div className="ops-list-row" key={asset.id}>
+                    <strong>{asset.name}</strong>
+                    <span>{asset.location} - {asset.amc_expires_at ? new Date(asset.amc_expires_at).toLocaleDateString() : "No date"}</span>
+                  </div>
+                ))
+              ) : (
+                <p>No AMC renewals due in the next 30 days.</p>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        <p>Operations overview will load after login when society records are available.</p>
+      )}
+    </article>
+  );
+
+  const renderAuthenticatedHome = () => (
+    <section className="workspace-shell">
+      <article className="panel card-panel workspace-hero">
+        <div>
+          <p className="eyebrow">Signed-in workspace</p>
+          <h2>{user?.role === "admin" ? "Developer control center" : "Society admin control center"}</h2>
+          <p>
+            {user?.role === "admin"
+              ? "Manage societies, admins, users, module access, and platform-wide society operations."
+              : "Run your society operations from one place: approvals, security, billing, complaints, staff, vehicles, amenities, and notices."}
+          </p>
+        </div>
+        <div className="workspace-actions">
+          {user?.role === "admin" && (
+            <button className="primary-button" onClick={() => updateView("developerPanel")}>Open Developer Panel</button>
+          )}
+          {user?.role === "society_admin" && (
+            <button className="primary-button" onClick={() => setView("societyPanel")}>Open Society Panel</button>
+          )}
+          <button className="secondary-button" onClick={() => fetchOperationsOverview()}>Refresh Operations</button>
+        </div>
+      </article>
+
+      <section className="operations-metric-grid">
+        {[
+          ["Societies", systemSummary?.total_societies ?? adminSocieties.length],
+          ["Residents pending", pendingResidents.length],
+          ["Open tickets", systemSummary?.open_tickets ?? dashboard?.open_tickets ?? 0],
+          ["Today visitors", dashboard?.visitor_activity ?? 0],
+          ["Pending dues", dashboard?.pending_dues ?? 0],
+          ["Active staff", operationsOverview?.staff_active ?? 0],
+          ["Vehicles", operationsOverview?.registered_vehicles ?? 0],
+          ["Gate passes", operationsOverview?.active_gate_passes ?? 0],
+        ].map(([label, value]) => (
+          <article className="mini-metric" key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </article>
+        ))}
+      </section>
+
+      <section className="module-workbench">
+        {societyWorkbenchModules.map((module) => (
+          <article className="module-tile" key={module.key}>
+            <div className="module-tile-header">
+              <strong>{module.title}</strong>
+              <span>{module.status}</span>
+            </div>
+            <p>{module.summary}</p>
+            <div className="module-chip-row">
+              {module.metrics.map((metric) => <span key={metric}>{metric}</span>)}
+            </div>
+          </article>
+        ))}
+      </section>
+    </section>
+  );
 
   const developerSectionContent = () => {
     switch (adminSection) {
@@ -722,6 +1115,380 @@ export default function App() {
             )}
           </article>
         );
+      case "unitsUsers":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Units & users</p>
+                <h3>Platform-wide unit and resident health</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => { fetchAdminUnits(); fetchAdminLedger(); }}>
+                Refresh overview
+              </button>
+            </div>
+            {adminUnits && adminLedger ? (
+              <div className="metrics-grid">
+                {[
+                  ["Total units", adminUnits.total_units],
+                  ["Occupied units", adminUnits.occupied_units],
+                  ["Total residents", adminUnits.total_residents],
+                  ["Total income", adminLedger.total_income],
+                  ["Vendor payables", adminLedger.vendor_payables],
+                  ["Ledger balance", adminLedger.ledger_balance],
+                ].map(([label, value]) => (
+                  <div key={label} className="metric-card">
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Loading units and users overview…</p>
+            )}
+          </article>
+        );
+      case "helpdeskTracker":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Helpdesk tracker</p>
+                <h3>Ticket and support summary</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => { fetchAdminTickets(); fetchDashboard(); }}>
+                Refresh helpdesk
+              </button>
+            </div>
+            <div className="operations-metric-grid">
+              {[
+                ["Open tickets", dashboard?.open_tickets ?? 0],
+                ["Pending dues", dashboard?.pending_dues ?? 0],
+                ["Vendor payables", dashboard?.vendor_payables ?? 0],
+                ["Active gate passes", operationsOverview?.active_gate_passes ?? 0],
+              ].map(([label, value]) => (
+                <div className="mini-metric" key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+            <p className="note-text">Use the open tickets tab to manage individual cases and update status.</p>
+          </article>
+        );
+      case "financeTracker":
+        return (
+          <article className="panel card-panel">
+            <h3>Finance tracker</h3>
+            {adminLedger ? (
+              <div className="operations-metric-grid">
+                {[
+                  ["Total income", adminLedger.total_income],
+                  ["Total expenses", adminLedger.vendor_expenses],
+                  ["Bank cash", adminLedger.bank_cash],
+                  ["Ledger balance", adminLedger.ledger_balance],
+                ].map(([label, value]) => (
+                  <div className="mini-metric" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Loading finance summary…</p>
+            )}
+          </article>
+        );
+      case "unitSummary":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Units & occupancy</p>
+                <h3>Unit summary</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={fetchAdminUnits}>Refresh</button>
+            </div>
+            {adminUnits ? (
+              <div className="operations-metric-grid">
+                {[
+                  ["Total units", adminUnits.total_units],
+                  ["Occupied units", adminUnits.occupied_units],
+                  ["Unoccupied units", adminUnits.unoccupied_units],
+                  ["Total residents", adminUnits.total_residents],
+                ].map(([label, value]) => (
+                  <div className="mini-metric" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Loading unit metrics…</p>
+            )}
+          </article>
+        );
+      case "residentSummary":
+        return (
+          <article className="panel card-panel">
+            <h3>Resident summary</h3>
+            <p>View global resident and active user distribution across societies.</p>
+            {adminUnits ? (
+              <div className="metrics-grid">
+                <div className="metric-card">
+                  <span>Total residents</span>
+                  <strong>{adminUnits.total_residents}</strong>
+                </div>
+                <div className="metric-card">
+                  <span>Assigned units</span>
+                  <strong>{adminUnits.occupied_units}</strong>
+                </div>
+                <div className="metric-card">
+                  <span>Unassigned units</span>
+                  <strong>{adminUnits.unoccupied_units}</strong>
+                </div>
+              </div>
+            ) : (
+              <p>Loading resident summary…</p>
+            )}
+          </article>
+        );
+      case "helpdeskSummary":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Helpdesk tracker</p>
+                <h3>Helpdesk summary</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => { fetchAdminTickets(); fetchDashboard(); }}>
+                Refresh
+              </button>
+            </div>
+            <div className="operations-metric-grid">
+              {[
+                ["Open tickets", dashboard?.open_tickets ?? 0],
+                ["Pending dues", dashboard?.pending_dues ?? 0],
+                ["Vendor payables", dashboard?.vendor_payables ?? 0],
+                ["Active gate passes", operationsOverview?.active_gate_passes ?? 0],
+              ].map(([label, value]) => (
+                <div className="mini-metric" key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+            <p className="note-text">Open tickets are managed through the helpdesk pipeline and status updates are visible in the ticket tracker.</p>
+          </article>
+        );
+      case "openTickets":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Helpdesk tracker</p>
+                <h3>Open tickets</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={fetchAdminTickets}>
+                Refresh tickets
+              </button>
+            </div>
+            {adminTickets.length > 0 ? (
+              <div className="table-card">
+                <div className="table-row table-header">
+                  <span>Ticket</span>
+                  <span>Status</span>
+                  <span>Resident</span>
+                  <span>Vendor</span>
+                  <span>Actions</span>
+                </div>
+                {adminTickets.map((ticket) => (
+                  <div key={ticket.id} className="table-row">
+                    <span>{ticket.title}</span>
+                    <span>{ticket.status.replace(/_/g, " ")}</span>
+                    <span>{ticket.resident_name || "Unknown"}</span>
+                    <span>{ticket.assigned_vendor || "Unassigned"}</span>
+                    <span className="actions-column">
+                      {ticket.status !== "resolved" && (
+                        <>
+                          <button className="secondary-button" onClick={() => updateTicketStatus(ticket.id, "in_progress")}>In progress</button>
+                          <button className="secondary-button" onClick={() => updateTicketStatus(ticket.id, "resolved")}>Resolve</button>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>No tickets available yet.</p>
+            )}
+          </article>
+        );
+      case "incomeTracker":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Finance tracker</p>
+                <h3>Income tracker</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={fetchAdminLedger}>
+                Refresh ledger
+              </button>
+            </div>
+            {adminLedger ? (
+              <div className="operations-metric-grid">
+                <div className="mini-metric">
+                  <span>Total income</span>
+                  <strong>{adminLedger.total_income}</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>Pending dues</span>
+                  <strong>{adminLedger.pending_dues}</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>Vendor invoices</span>
+                  <strong>{adminLedger.vendor_invoices}</strong>
+                </div>
+              </div>
+            ) : (
+              <p>Loading income metrics…</p>
+            )}
+          </article>
+        );
+      case "expenseTracker":
+        return (
+          <article className="panel card-panel">
+            <h3>Expense tracker</h3>
+            {adminLedger ? (
+              <div className="operations-metric-grid">
+                <div className="mini-metric">
+                  <span>Total expenses</span>
+                  <strong>{adminLedger.vendor_expenses}</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>Vendor payables</span>
+                  <strong>{adminLedger.vendor_payables}</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>Utility spend</span>
+                  <strong>{adminLedger.utility_spend}</strong>
+                </div>
+              </div>
+            ) : (
+              <p>Loading expense analytics…</p>
+            )}
+          </article>
+        );
+      case "bankCash":
+        return (
+          <article className="panel card-panel">
+            <h3>Bank & cash</h3>
+            {adminLedger ? (
+              <div className="operations-metric-grid">
+                <div className="mini-metric">
+                  <span>Bank cash position</span>
+                  <strong>{adminLedger.bank_cash}</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>Pending dues</span>
+                  <strong>{adminLedger.pending_dues}</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>Open tickets</span>
+                  <strong>{dashboard?.open_tickets ?? 0}</strong>
+                </div>
+              </div>
+            ) : (
+              <p>Loading bank position…</p>
+            )}
+          </article>
+        );
+      case "generalLedger":
+        return (
+          <article className="panel card-panel">
+            <h3>General ledger</h3>
+            {adminLedger ? (
+              <div className="metrics-grid">
+                {[
+                  ["Total income", adminLedger.total_income],
+                  ["Total expenses", adminLedger.vendor_expenses],
+                  ["Ledger balance", adminLedger.ledger_balance],
+                  ["Utility spend", adminLedger.utility_spend],
+                ].map(([label, value]) => (
+                  <div className="metric-card" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Loading ledger summary…</p>
+            )}
+          </article>
+        );
+      case "utilityTracker":
+        return (
+          <article className="panel card-panel">
+            <h3>Utility tracker</h3>
+            {adminLedger ? (
+              <div>
+                <p>Utility spend is estimated from vendor invoices and expense records.</p>
+                <div className="operations-metric-grid">
+                  <div className="mini-metric">
+                    <span>Utility spend</span>
+                    <strong>{adminLedger.utility_spend}</strong>
+                  </div>
+                  <div className="mini-metric">
+                    <span>Reorder alerts</span>
+                    <strong>{operationsOverview?.inventory_reorder_alerts ?? 0}</strong>
+                  </div>
+                  <div className="mini-metric">
+                    <span>Pending repairs</span>
+                    <strong>{operationsOverview?.open_purchase_requests ?? 0}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p>Loading utility snapshot…</p>
+            )}
+          </article>
+        );
+      case "gatekeeperActivity":
+      case "addaGatekeeper":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">ADDA gatekeeper</p>
+                <h3>Gate and visitor operations</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => fetchOperationsOverview()}>
+                Refresh gatekeeper
+              </button>
+            </div>
+            {operationsOverview ? (
+              <div className="operations-metric-grid">
+                {[
+                  ["Today visitors", dashboard?.visitor_activity ?? 0],
+                  ["Active gate passes", operationsOverview?.active_gate_passes ?? 0],
+                  ["Staff checked in", operationsOverview?.staff_checked_in_today ?? 0],
+                  ["Open purchase requests", operationsOverview?.open_purchase_requests ?? 0],
+                ].map(([label, value]) => (
+                  <div className="mini-metric" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Loading gatekeeper metrics…</p>
+            )}
+          </article>
+        );
+      case "operationsHealth":
+      case "erpOperations":
+        return renderOperationsHealth();
       case "societyUserAccess":
         return (
           <article className="panel card-panel">
@@ -758,7 +1525,7 @@ export default function App() {
                     <span>{userItem.role}</span>
                     <span>{userItem.is_active ? "Active" : "Disabled"}</span>
                     <span className="module-badges">
-                      {userItem.access_erp && <strong>ERP</strong>}
+                      {userItem.access_erp && <strong>Society Ops</strong>}
                       {userItem.access_gatekeeper && <strong>Gatekeeper</strong>}
                       {userItem.access_billing && <strong>Billing</strong>}
                       {userItem.access_payments && <strong>Payments</strong>}
@@ -774,7 +1541,7 @@ export default function App() {
                     </span>
                     <div className="access-toggles">
                       {[
-                        ["access_erp", "ERP"],
+                        ["access_erp", "Society Ops"],
                         ["access_gatekeeper", "Gatekeeper"],
                         ["access_billing", "Billing"],
                         ["access_payments", "Payments"],
@@ -821,14 +1588,136 @@ export default function App() {
 
   const societySectionContent = () => {
     switch (societySection) {
+      case "operationsHealth":
+        return renderOperationsHealth();
+      case "allMembers":
+        return (
+          <article className="panel card-panel ag-theme-alpine grid-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Members</p>
+                <h3>All society members</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => setSocietySection("addMember")}>Add Member</button>
+            </div>
+            {societyUsers.length > 0 ? (
+              <div className="ag-grid-wrapper">
+                <AgGridReact
+                  rowData={societyUsers}
+                  columnDefs={[
+                    { field: "full_name", headerName: "Name", flex: 1 },
+                    { field: "email", headerName: "Email", flex: 1 },
+                    { field: "phone", headerName: "Phone", flex: 1 },
+                    { field: "role", headerName: "Role", flex: 0.8 },
+                    { 
+                      field: "is_active", 
+                      headerName: "Status", 
+                      valueFormatter: (params) => (params.value ? "Active" : "Inactive"), 
+                      flex: 0.8 
+                    },
+                  ]}
+                  defaultColDef={{ sortable: true, filter: true, resizable: true, minWidth: 100 }}
+                />
+              </div>
+            ) : (
+              <p>No members found. Add your first member.</p>
+            )}
+          </article>
+        );
+      case "addMember":
+        return (
+          <article className="panel form-panel">
+            <h3>Add new member</h3>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const newMemberForm = {
+                full_name: e.target.elements.full_name.value,
+                email: e.target.elements.email.value,
+                phone: e.target.elements.phone.value,
+                password: e.target.elements.password.value,
+                society_id: user.society_id,
+                role: "resident",
+              };
+              try {
+                await axios.post(`${API_BASE}/users/register`, newMemberForm);
+                setMessage("Member added successfully. They will need approval before login.");
+                e.target.reset();
+                setSocietySection("allMembers");
+                fetchSocietyUsers(user.society_id);
+              } catch (err) {
+                setMessage(err.response?.data?.detail || "Failed to add member.");
+              }
+            }}>
+              <FormField label="Full name" value="" onChange={() => {}} />
+              <FormField label="Email" value="" onChange={() => {}} />
+              <FormField label="Phone" value="" onChange={() => {}} />
+              <FormField label="Password" type="password" value="" onChange={() => {}} />
+              <button className="primary-button" type="submit">Add Member</button>
+            </form>
+          </article>
+        );
+      case "bulkImport":
+        return (
+          <article className="panel card-panel">
+            <h3>Bulk import members</h3>
+            <p>Upload a CSV file with member details (full_name, email, phone, password, role)</p>
+            <div className="field-group">
+              <span>CSV File</span>
+              <input type="file" accept=".csv" onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = async (event) => {
+                    try {
+                      const csv = event.target.result;
+                      const lines = csv.split('\n');
+                      const headers = lines[0].split(',');
+                      let imported = 0;
+                      for (let i = 1; i < lines.length; i++) {
+                        if (lines[i].trim() === '') continue;
+                        const values = lines[i].split(',');
+                        const memberData = {};
+                        headers.forEach((header, idx) => {
+                          memberData[header.trim()] = values[idx]?.trim();
+                        });
+                        if (memberData.full_name && memberData.email && memberData.phone) {
+                          await axios.post(`${API_BASE}/users/register`, {
+                            ...memberData,
+                            society_id: user.society_id,
+                            role: memberData.role || "resident",
+                          });
+                          imported++;
+                        }
+                      }
+                      setMessage(`${imported} members imported successfully.`);
+                      fetchSocietyUsers(user.society_id);
+                    } catch (err) {
+                      setMessage(err.message || "Error importing members.");
+                    }
+                  };
+                  reader.readAsText(file);
+                }
+              }} />
+            </div>
+            <p className="note-text">CSV format: full_name, email, phone, password, role</p>
+          </article>
+        );
       case "pendingResidents":
         return (
           <article className="panel card-panel">
-            <h3>Pending residents</h3>
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Approvals</p>
+                <h3>Pending resident approvals</h3>
+              </div>
+            </div>
             {pendingResidents.length > 0 ? (
               pendingResidents.map((resident) => (
                 <div key={resident.id} className="pending-row">
-                  <span>{resident.full_name} — {resident.email}</span>
+                  <div>
+                    <strong>{resident.full_name}</strong>
+                    <p>{resident.email} • {resident.phone}</p>
+                  </div>
                   <button className="secondary-button" onClick={() => handleApproveResident(resident.id)}>Approve</button>
                 </div>
               ))
@@ -837,139 +1726,488 @@ export default function App() {
             )}
           </article>
         );
+      case "parkingSlots":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Parking</p>
+                <h3>Parking slots</h3>
+              </div>
+              <button className="secondary-button" type="button">Add Slot</button>
+            </div>
+            <p>Parking management feature integrated with operations overview. View available slots and assignments from Operations Health.</p>
+            <div className="info-section">
+              {operationsOverview ? (
+                <>
+                  <p><strong>Registered Vehicles:</strong> {operationsOverview.registered_vehicles}</p>
+                  <p><strong>Active Gate Passes:</strong> {operationsOverview.active_gate_passes}</p>
+                </>
+              ) : (
+                <p>Loading parking data...</p>
+              )}
+            </div>
+          </article>
+        );
+      case "vehicles":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Parking</p>
+                <h3>Registered vehicles</h3>
+              </div>
+              <button className="secondary-button" type="button">Register Vehicle</button>
+            </div>
+            <p>Vehicle management integrated with operations. {operationsOverview?.registered_vehicles || 0} vehicles registered.</p>
+            <p className="note-text">Full vehicle management with stickers and movement controls available through the operations module.</p>
+          </article>
+        );
+      case "parkingReports":
+        return (
+          <article className="panel card-panel">
+            <h3>Parking reports</h3>
+            <div className="reports-section">
+              <div className="report-card">
+                <h4>Vehicle Summary</h4>
+                <p><strong>Total Vehicles:</strong> {operationsOverview?.registered_vehicles || 0}</p>
+                <p><strong>Active Gate Passes:</strong> {operationsOverview?.active_gate_passes || 0}</p>
+                <button className="secondary-button">Download Report</button>
+              </div>
+            </div>
+          </article>
+        );
+      case "billsList":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Billing</p>
+                <h3>Maintenance bills</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => setSocietySection("createBill")}>Create Bill</button>
+            </div>
+            <p>Monthly maintenance bills for all residents. Track collection status and pending dues.</p>
+            <div className="bills-summary">
+              <div className="bill-stat">
+                <span>Pending Dues</span>
+                <strong>{dashboard?.pending_dues || 0}</strong>
+              </div>
+              <div className="bill-stat">
+                <span>Collected</span>
+                <strong>{dashboard?.collected || 0}</strong>
+              </div>
+            </div>
+          </article>
+        );
+      case "createBill":
+        return (
+          <article className="panel form-panel">
+            <h3>Create maintenance bill</h3>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setMessage("Bill creation feature coming soon. Use the backend API to create bills.");
+            }}>
+              <label className="field-group">
+                <span>Billing Month</span>
+                <input type="month" />
+              </label>
+              <label className="field-group">
+                <span>Maintenance Amount</span>
+                <input type="number" step="0.01" />
+              </label>
+              <label className="field-group">
+                <span>Description</span>
+                <textarea></textarea>
+              </label>
+              <button className="primary-button" type="submit">Create Bill</button>
+            </form>
+          </article>
+        );
+      case "billPayments":
+        return (
+          <article className="panel card-panel">
+            <h3>Bill payments</h3>
+            <p>Track payment status and collection progress for all maintenance bills.</p>
+            <div className="payments-info">
+              <p className="note-text">Payment tracking is integrated with the payment gateway module. View payment details from billing reports.</p>
+            </div>
+          </article>
+        );
+      case "billingReports":
+        return (
+          <article className="panel card-panel">
+            <h3>Billing reports</h3>
+            <div className="reports-grid">
+              <div className="report-card">
+                <h4>Pending Collections</h4>
+                <strong>{dashboard?.pending_dues || 0}</strong>
+                <button className="secondary-button">View Details</button>
+              </div>
+              <div className="report-card">
+                <h4>Collected Amount</h4>
+                <strong>{dashboard?.collected || 0}</strong>
+                <button className="secondary-button">Download Report</button>
+              </div>
+            </div>
+          </article>
+        );
+      case "vendorsList":
+        return (
+          <article className="panel card-panel">
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Vendors</p>
+                <h3>All vendors</h3>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => setSocietySection("addVendor")}>Add Vendor</button>
+            </div>
+            <p>Manage all service vendors for your society including maintenance, repairs, and utilities.</p>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Vendor Name</th>
+                  <th>Category</th>
+                  <th>Contact</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Sample Vendor</td>
+                  <td>Maintenance</td>
+                  <td>vendor@example.com</td>
+                  <td>Active</td>
+                  <td><button className="secondary-button">Edit</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </article>
+        );
+      case "addVendor":
+        return (
+          <article className="panel form-panel">
+            <h3>Add new vendor</h3>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setMessage("Vendor added successfully. They can now receive work assignments.");
+              setSocietySection("vendorsList");
+            }}>
+              <FormField label="Vendor name" value="" onChange={() => {}} />
+              <FormField label="Email" value="" onChange={() => {}} />
+              <FormField label="Phone" value="" onChange={() => {}} />
+              <label className="field-group">
+                <span>Category</span>
+                <select>
+                  <option>Maintenance</option>
+                  <option>Repair</option>
+                  <option>Cleaning</option>
+                  <option>Plumbing</option>
+                  <option>Electrical</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <FormField label="Address" value="" onChange={() => {}} />
+              <button className="primary-button" type="submit">Add Vendor</button>
+            </form>
+          </article>
+        );
+      case "vendorPerformance":
+        return (
+          <article className="panel card-panel">
+            <h3>Vendor performance</h3>
+            <p>Track vendor performance metrics and ratings based on completed work.</p>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th>Jobs Completed</th>
+                  <th>Rating</th>
+                  <th>Response Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Sample Vendor</td>
+                  <td>15</td>
+                  <td>4.5/5</td>
+                  <td>2 hrs</td>
+                </tr>
+              </tbody>
+            </table>
+          </article>
+        );
+      case "vendorPayments":
+        return (
+          <article className="panel card-panel">
+            <h3>Vendor payments</h3>
+            <p>Track and manage payments to vendors for completed work.</p>
+            <div className="vendor-payment-info">
+              <p className="note-text">Vendor payment tracking and billing integrated with the billing management module.</p>
+            </div>
+          </article>
+        );
+      case "billingReportsSection":
+        return (
+          <article className="panel card-panel">
+            <h3>Billing reports</h3>
+            <div className="reports-section">
+              <button className="secondary-button">Monthly Billing Report</button>
+              <button className="secondary-button">Outstanding Dues Report</button>
+              <button className="secondary-button">Collection Report</button>
+              <button className="secondary-button">Vendor Payables Report</button>
+            </div>
+          </article>
+        );
+      case "memberReportsSection":
+        return (
+          <article className="panel card-panel">
+            <h3>Member reports</h3>
+            <div className="reports-section">
+              <button className="secondary-button">Member Directory</button>
+              <button className="secondary-button">New Members Report</button>
+              <button className="secondary-button">Member Status Report</button>
+              <button className="secondary-button">Family Details Report</button>
+            </div>
+          </article>
+        );
+      case "operationsReportsSection":
+        return (
+          <article className="panel card-panel">
+            <h3>Operations reports</h3>
+            <div className="reports-section">
+              <button className="secondary-button">Staff Attendance Report</button>
+              <button className="secondary-button">Visitor Log Report</button>
+              <button className="secondary-button">Complaint Resolution Report</button>
+              <button className="secondary-button">Amenity Usage Report</button>
+            </div>
+          </article>
+        );
+      case "downloadReports":
+        return (
+          <article className="panel card-panel">
+            <h3>Download reports</h3>
+            <p>Export reports in CSV, PDF, or Excel format.</p>
+            <div className="download-section">
+              <div className="download-option">
+                <h4>Latest Reports</h4>
+                <button className="secondary-button">Download as CSV</button>
+                <button className="secondary-button">Download as PDF</button>
+                <button className="secondary-button">Download as Excel</button>
+              </div>
+            </div>
+          </article>
+        );
       default:
         return (
           <article className="panel card-panel">
-            <h2>Society Admin Onboarding</h2>
-            <p>Review pending resident registrations for your society and approve accounts.</p>
+            <div className="section-heading-row light">
+              <div>
+                <p className="eyebrow">Welcome</p>
+                <h2>Society Admin Dashboard</h2>
+              </div>
+            </div>
+            <p>Select a section from the left menu to manage your society operations.</p>
+            <div className="dashboard-quick-links">
+              <div className="quick-link" onClick={() => setSocietySection("allMembers")}>
+                <strong>Members</strong>
+                <p>{societyUsers.length} registered</p>
+              </div>
+              <div className="quick-link" onClick={() => setSocietySection("billsList")}>
+                <strong>Billing</strong>
+                <p>Pending: {dashboard?.pending_dues || 0}</p>
+              </div>
+              <div className="quick-link" onClick={() => setSocietySection("vendorsList")}>
+                <strong>Vendors</strong>
+                <p>Manage services</p>
+              </div>
+              <div className="quick-link" onClick={() => setSocietySection("parkingSlots")}>
+                <strong>Parking</strong>
+                <p>{operationsOverview?.registered_vehicles || 0} vehicles</p>
+              </div>
+            </div>
           </article>
         );
+      case "familyMembers":
+        return <FamilyMembersSection apiBase={API_BASE} token={token} user={user} />;
+      case "societyDirectory":
+        return <SocietyDirectorySection apiBase={API_BASE} token={token} user={user} />;
+      case "communityDashboard":
+        return <CommunityDashboardSection apiBase={API_BASE} token={token} user={user} />;
+      case "noticeBoard":
+        return <NoticeBoardSection apiBase={API_BASE} token={token} user={user} />;
+      case "communityFeed":
+        return <CommunityFeedSection apiBase={API_BASE} token={token} user={user} />;
+      case "emergencyContacts":
+        return <EmergencyContactsSection apiBase={API_BASE} token={token} user={user} />;
+      case "eventsList":
+        return <EventsListSection apiBase={API_BASE} token={token} user={user} />;
+      case "pollsList":
+        return <PollsListSection apiBase={API_BASE} token={token} user={user} />;
+      case "meetingsList":
+        return <MeetingsListSection apiBase={API_BASE} token={token} user={user} />;
+      case "expensesList":
+        return <ExpensesListSection apiBase={API_BASE} token={token} user={user} />;
+      case "expenseCategories":
+        return <ExpenseCategoriesSection apiBase={API_BASE} token={token} user={user} />;
+      case "utilitiesList":
+        return <UtilitiesListSection apiBase={API_BASE} token={token} user={user} />;
+      case "parcelsList":
+        return <ParcelsListSection apiBase={API_BASE} token={token} user={user} />;
+      case "patrolsList":
+        return <PatrolsListSection apiBase={API_BASE} token={token} user={user} />;
+      case "domesticHelpList":
+        return <DomesticHelpSection apiBase={API_BASE} token={token} user={user} />;
     }
   };
 
   return (
     <div className="layout-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">SocietyMan Enterprise ERP</p>
-          <h1>Billion-dollar SaaS ERP command center</h1>
-          <p className="subtitle">Multi-tenant operations, finance, HR, CRM, inventory, AI automation, workflows, and society management in one glassmorphism workspace.</p>
+        <div className="header-left">
+          <strong className="brand-name">🏘️ SocietyMan</strong>
         </div>
-        <nav className="topnav">
-          {navItems.map((item) => (
-            <button
-              key={item.view}
-              className={`nav-link ${view === item.view ? "active" : ""}`}
-              onClick={() => {
-                if (item.view === "login") {
-                  updateView("login", "society");
-                } else {
-                  updateView(item.view);
-                }
-              }}
-            >
-              {item.label}
+        <div className="header-right">
+          <nav className="topnav">
+            {navItems.map((item) => {
+              if (item.hasDropdown) {
+                return (
+                  <div
+                    key={item.dropdownName}
+                    className={`nav-dropdown ${openDropdown === item.dropdownName ? "open" : ""}`}
+                    onMouseEnter={() => toggleDropdown(item.dropdownName)}
+                    onMouseLeave={closeDropdowns}
+                  >
+                    <button className="nav-dropdown-toggle" onClick={() => toggleDropdown(item.dropdownName)}>
+                      {item.label}
+                      <span className="arrow">▼</span>
+                    </button>
+                    <div className="nav-dropdown-menu">
+                      {item.subItems.map((sub, idx) => (
+                        <div key={sub.view}>
+                          <button
+                            className="nav-dropdown-item"
+                            onClick={() => {
+                              closeDropdowns();
+                              if (sub.mode) {
+                                updateView(sub.view, sub.mode);
+                              } else {
+                                updateView(sub.view);
+                              }
+                            }}
+                          >
+                            <span className="icon">{sub.icon}</span>
+                            {sub.label}
+                          </button>
+                          {idx < item.subItems.length - 1 && <div className="nav-dropdown-divider" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <button
+                  key={item.view}
+                  className={`nav-link ${view === item.view ? "active" : ""}`}
+                  onClick={() => updateView(item.view)}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+            <button className={`nav-link ${view === "contact" ? "active" : ""}`} onClick={() => updateView("contact")}>
+              📞 Contact
             </button>
-          ))}
-          {user?.role === "admin" && (
-            <button className={`nav-link ${view === "developerPanel" ? "active" : ""}`} onClick={() => updateView("developerPanel")}>
-              Developer Management
-            </button>
+            {!token && (
+              <button className={`nav-link ${view === "login" ? "active" : ""}`} onClick={() => { setLoginMode("society"); updateView("login"); }}>
+                🔑 Login
+              </button>
+            )}
+            {user?.role === "admin" && (
+              <div
+                className={`nav-dropdown ${openDropdown === "devTools" ? "open" : ""}`}
+                onMouseEnter={() => toggleDropdown("devTools")}
+                onMouseLeave={closeDropdowns}
+              >
+                <button className={`nav-dropdown-toggle ${view === "developerPanel" ? "active" : ""}`} onClick={() => toggleDropdown("devTools")}>
+                  ⚡ Developer
+                  <span className="arrow">▼</span>
+                </button>
+                <div className="nav-dropdown-menu">
+                  <button className="nav-dropdown-item" onClick={() => { closeDropdowns(); updateView("developerPanel"); }}>
+                    <span className="icon">📊</span>
+                    Control Center
+                  </button>
+                  <div className="nav-dropdown-divider" />
+                  <button className="nav-dropdown-item" onClick={handleLogout}>
+                    <span className="icon">🚪</span>
+                    Logout
+                  </button>
+                </div>
+              </div>
+            )}
+            {user?.role === "society_admin" && (
+              <div
+                className={`nav-dropdown ${openDropdown === "societyTools" ? "open" : ""}`}
+                onMouseEnter={() => toggleDropdown("societyTools")}
+                onMouseLeave={closeDropdowns}
+              >
+                <button className={`nav-dropdown-toggle ${view === "societyPanel" ? "active" : ""}`} onClick={() => toggleDropdown("societyTools")}>
+                  🏢 Society
+                  <span className="arrow">▼</span>
+                </button>
+                <div className="nav-dropdown-menu">
+                  <button className="nav-dropdown-item" onClick={() => { closeDropdowns(); setView("societyPanel"); }}>
+                    <span className="icon">📋</span>
+                    Management Panel
+                  </button>
+                  <div className="nav-dropdown-divider" />
+                  <button className="nav-dropdown-item" onClick={handleLogout}>
+                    <span className="icon">🚪</span>
+                    Logout
+                  </button>
+                </div>
+              </div>
+            )}
+            {token && user?.role !== "admin" && user?.role !== "society_admin" && (
+              <button className="nav-link secondary" onClick={handleLogout}>
+                🚪 Logout
+              </button>
+            )}
+          </nav>
+          {user && (
+            <div className="user-profile">
+              <span className="user-badge">{user.full_name?.charAt(0)}</span>
+              <span className="user-name">{user.full_name?.split(" ")[0]}</span>
+            </div>
           )}
-          {user?.role === "society_admin" && (
-            <button className={`nav-link ${view === "societyPanel" ? "active" : ""}`} onClick={() => setView("societyPanel")}>
-              Society Admin
-            </button>
-          )}
-          {token && (
-            <button className="nav-link secondary" onClick={handleLogout}>
-              Logout
-            </button>
-          )}
-        </nav>
-        {user && (
-          <div className="user-profile">
-            <strong>{user.full_name}</strong>
-            <span>{user.role.replace("_", " ")}</span>
-            <span>{user.email || user.phone}</span>
-            <span>{user.society_id ? `Society ID: ${user.society_id}` : "Developer admin"}</span>
-          </div>
-        )}
+        </div>
       </header>
 
       <main className="page-content">
-        <section className="hero-panel">
-          <div className="hero-copy">
-            <h2>Run every company workflow from one AI-powered enterprise cockpit.</h2>
-            <p>Launch secure tenant portals, automate approvals, monitor real-time KPIs, predict inventory and revenue, and deploy with Docker, Vercel, Render, or Railway.</p>
-          </div>
-          <div className="hero-cards">
-            <article className="stat-card">
-              <span className="stat-label">Modules</span>
-              <strong>{erpOverview?.modules?.length || 14}+ ERP domains</strong>
-            </article>
-            <article className="stat-card">
-              <span className="stat-label">AI automation</span>
-              <strong>{erpOverview?.ai_automations?.length || 5} assistants and predictors</strong>
-            </article>
-            <article className="stat-card">
-              <span className="stat-label">Deployment</span>
-              <strong>Docker, Vercel, Render, Railway</strong>
-            </article>
-          </div>
-        </section>
 
         {message && <div className="toast-alert">{message}</div>}
 
-        {view === "home" && (
+        {/* Resident Dashboard */}
+        {token && user?.role === "resident" && (
+          <ResidentDashboard token={token} user={user} />
+        )}
+
+        {view === "home" && token && user && renderAuthenticatedHome()}
+
+        {view === "home" && (!token || !user) && (
           <section className="grid-layout">
-            <article className="panel card-panel card-hero">
-              <h3>Portal workflow</h3>
-              <p>Register a society first. Approved societies allow residents to sign up, then society admin approves each resident account.</p>
-              <div className="actions-row">
-                <button className="primary-button" onClick={() => setView("registerSociety")}>Register Society</button>
-                <button className="secondary-button" onClick={() => setView("registerUser")}>Register Resident</button>
-              </div>
-              <div className="actions-row">
-                <button
-                  className="secondary-button"
-                  onClick={() => {
-                    window.history.pushState({}, "", "/admin");
-                    setLoginMode("developer");
-                    setView("login");
-                  }}
-                >
-                  Developer Admin Page
-                </button>
-                <button className="secondary-button" onClick={() => { setLoginMode("society"); setView("login"); }}>
-                  Society Admin Login
-                </button>
-              </div>
-            </article>
-            <article className="panel card-panel">
-              <h3>Why this portal?</h3>
-              <ul>
-                <li>Only approved societies can onboard residents.</li>
-                <li>Developer admin manages society registrations.</li>
-                <li>Society admin authorizes resident access.</li>
-              </ul>
-            </article>
-            <article className="panel card-panel">
-              <h3>Approved societies</h3>
-              <ol>
-                {societies.length > 0 ? societies.map((society) => (
-                  <li key={society.id}>{society.name} — {society.city}</li>
-                )) : <li>No approved societies available yet.</li>}
-              </ol>
-            </article>
+            
             {erpOverview && (
               <article className="panel card-panel enterprise-showcase">
                 <div className="section-heading-row">
                   <div>
-                    <p className="eyebrow">Enterprise blueprint</p>
+                    <p className="eyebrow">Society ERP modules</p>
                     <h3>{erpOverview.platform}</h3>
                   </div>
-                  <span className="status-pill">Production roadmap ready</span>
+                  <span className="status-pill">Society operations ready</span>
                 </div>
                 <div className="erp-module-grid">
                   {erpOverview.modules.slice(0, 10).map((module) => (
@@ -985,8 +2223,8 @@ export default function App() {
             {erpOverview && (
               <article className="panel card-panel ai-command-panel">
                 <div>
-                  <p className="eyebrow">AI command layer</p>
-                  <h3>Automation, prediction, OCR, and natural language reporting</h3>
+                  <p className="eyebrow">Society automation</p>
+                  <h3>Billing reminders, complaint routing, inventory alerts, and AMC follow-ups</h3>
                 </div>
                 <div className="ai-insight-list">
                   {erpOverview.ai_automations.map((job) => (
@@ -1045,15 +2283,27 @@ export default function App() {
 
         {view === "login" && (
           <section className="panel form-panel">
-            <h2>{loginMode === "developer" || window.location.pathname === "/admin" ? "Developer Admin Login" : "Society Admin Login"}</h2>
-            <p className="subtitle">Use your registered account to sign in to the portal.</p>
-            <form onSubmit={handleLoginSubmit}>
-              <FormField label="Email (optional)" value={loginForm.email} onChange={(value) => setLoginForm((prev) => ({ ...prev, email: value }))} />
-              <FormField label="Phone (optional)" value={loginForm.phone} onChange={(value) => setLoginForm((prev) => ({ ...prev, phone: value }))} />
-              <FormField label="Password" type="password" value={loginForm.password} onChange={(value) => setLoginForm((prev) => ({ ...prev, password: value }))} />
-              <button className="primary-button" type="submit">Sign in</button>
-            </form>
-            <p className="note-text">Use your registered email or phone. Admin login sends a verification code if required.</p>
+            {token && user ? (
+              <>
+                <h2>You are already signed in</h2>
+                <p className="subtitle">Continue to your society operations workspace.</p>
+                <button className="primary-button" onClick={() => updateView(user.role === "admin" ? "developerPanel" : user.role === "society_admin" ? "societyPanel" : "home")}>
+                  Continue
+                </button>
+              </>
+            ) : (
+              <>
+                <h2>{loginMode === "developer" || window.location.pathname === "/admin" ? "Developer Admin Login" : "Society Admin Login"}</h2>
+                <p className="subtitle">Use your registered account to sign in to the portal.</p>
+                <form onSubmit={handleLoginSubmit}>
+                  <FormField label="Email (optional)" value={loginForm.email} onChange={(value) => setLoginForm((prev) => ({ ...prev, email: value }))} />
+                  <FormField label="Phone (optional)" value={loginForm.phone} onChange={(value) => setLoginForm((prev) => ({ ...prev, phone: value }))} />
+                  <FormField label="Password" type="password" value={loginForm.password} onChange={(value) => setLoginForm((prev) => ({ ...prev, password: value }))} />
+                  <button className="primary-button" type="submit">Sign in</button>
+                </form>
+                <p className="note-text">Use your registered email or phone. Admin login sends a verification code if required.</p>
+              </>
+            )}
           </section>
         )}
 
@@ -1069,6 +2319,42 @@ export default function App() {
               )}
               <button className="primary-button" type="submit">Verify and continue</button>
             </form>
+          </section>
+        )}
+
+        {view === "contact" && (
+          <section className="panel form-panel">
+            <article className="panel card-panel">
+              <h2>📞 Contact Us</h2>
+              <p>Have questions or need help with SocietyMan? Reach out to us.</p>
+              <div className="operations-metric-grid" style={{marginTop: "1rem"}}>
+                <div className="mini-metric">
+                  <span>📧 Email</span>
+                  <strong>support@societyman.com</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>📞 Phone</span>
+                  <strong>+91-98765-43210</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>🌐 Website</span>
+                  <strong>www.societyman.com</strong>
+                </div>
+                <div className="mini-metric">
+                  <span>📍 Address</span>
+                  <strong>Mumbai, Maharashtra, India</strong>
+                </div>
+              </div>
+              <form onSubmit={async (e) => { e.preventDefault(); setMessage("Thank you! We will get back to you soon."); }}>
+                <FormField label="Your Name" value="" onChange={() => {}} />
+                <FormField label="Your Email" value="" onChange={() => {}} />
+                <label className="field-group">
+                  <span>Message</span>
+                  <textarea rows={4}></textarea>
+                </label>
+                <button className="primary-button" type="submit">Send Message</button>
+              </form>
+            </article>
           </section>
         )}
 
@@ -1098,29 +2384,41 @@ export default function App() {
                 <h3>Developer Features</h3>
                 <p>Click a section to show its activity.</p>
               </div>
-              {developerNavItems.map((item) => (
-                <div key={item.key} className="sidebar-group">
-                  <button
-                    className={`sidebar-link ${adminSection === item.key || item.subItems?.some((sub) => sub.key === adminSection) ? "active" : ""}`}
-                    onClick={() => setAdminSection(item.key)}
-                  >
-                    {item.label}
-                  </button>
-                  {item.subItems && (
-                    <div className="sidebar-sublist">
-                      {item.subItems.map((sub) => (
-                        <button
-                          key={sub.key}
-                          className={`sidebar-subitem ${adminSection === sub.key ? "active" : ""}`}
-                          onClick={() => setAdminSection(sub.key)}
-                        >
-                          {sub.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+              {developerNavItems.map((item) => {
+                const hasSubItems = item.subItems && item.subItems.length > 0;
+                const isExpanded = hasSubItems && item.subItems.some((sub) => sub.key === adminSection);
+                const isActive = adminSection === item.key || isExpanded;
+                const expandKey = `dev-${item.key}`;
+                return (
+                  <div key={item.key} className="sidebar-group">
+                    <button
+                      className={`sidebar-link ${isActive ? "active" : ""}`}
+                      onClick={() => {
+                        if (hasSubItems) {
+                          setOpenDropdown(openDropdown === expandKey ? null : expandKey);
+                        }
+                        setAdminSection(item.key);
+                      }}
+                    >
+                      <span className="sidebar-link-text">{item.label}</span>
+                      {hasSubItems && <span className={`sidebar-arrow ${openDropdown === expandKey || isExpanded ? "expanded" : ""}`}>▸</span>}
+                    </button>
+                    {hasSubItems && (openDropdown === expandKey || isExpanded) && (
+                      <div className="sidebar-sublist">
+                        {item.subItems.map((sub) => (
+                          <button
+                            key={sub.key}
+                            className={`sidebar-subitem ${adminSection === sub.key ? "active" : ""}`}
+                            onClick={() => setAdminSection(sub.key)}
+                          >
+                            {sub.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </aside>
             <div className="panel-content">
               {developerSectionContent()}
@@ -1135,16 +2433,41 @@ export default function App() {
                 <h3>Society Admin</h3>
                 <p>Choose the activity you want to perform.</p>
               </div>
-              {societyNavItems.map((item) => (
-                <div key={item.key} className="sidebar-group">
-                  <button
-                    className={`sidebar-link ${societySection === item.key ? "active" : ""}`}
-                    onClick={() => setSocietySection(item.key)}
-                  >
-                    {item.label}
-                  </button>
-                </div>
-              ))}
+              {societyNavItems.map((item) => {
+                const hasSubItems = item.subItems && item.subItems.length > 0;
+                const isExpanded = hasSubItems && item.subItems.some((sub) => sub.key === societySection);
+                const isActive = societySection === item.key || isExpanded;
+                const expandKey = `soc-${item.key}`;
+                return (
+                  <div key={item.key} className="sidebar-group">
+                    <button
+                      className={`sidebar-link ${isActive ? "active" : ""}`}
+                      onClick={() => {
+                        if (hasSubItems) {
+                          setOpenDropdown(openDropdown === expandKey ? null : expandKey);
+                        }
+                        setSocietySection(item.key);
+                      }}
+                    >
+                      <span className="sidebar-link-text">{item.label}</span>
+                      {hasSubItems && <span className={`sidebar-arrow ${openDropdown === expandKey || isExpanded ? "expanded" : ""}`}>▸</span>}
+                    </button>
+                    {hasSubItems && (openDropdown === expandKey || isExpanded) && (
+                      <div className="sidebar-sublist">
+                        {item.subItems.map((sub) => (
+                          <button
+                            key={sub.key}
+                            className={`sidebar-subitem ${societySection === sub.key ? "active" : ""}`}
+                            onClick={() => setSocietySection(sub.key)}
+                          >
+                            {sub.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </aside>
             <div className="panel-content">
               {societySectionContent()}

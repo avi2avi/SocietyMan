@@ -118,7 +118,7 @@ class SocietyRead(BaseModel):
     is_approved: bool = False
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UserRead(BaseModel):
@@ -141,7 +141,7 @@ class UserRead(BaseModel):
     access_visitor_management: bool = False
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UserAccessUpdate(BaseModel):
@@ -162,7 +162,7 @@ class SettingRead(BaseModel):
     description: str | None = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UnitCreate(BaseModel):
@@ -222,6 +222,229 @@ class VendorCreate(BaseModel):
     category: str
     contact_name: str
     contact_phone: str
+
+
+class AssetCreate(BaseModel):
+    society_id: int | None = None
+    name: str
+    category: str
+    location: str
+    vendor_id: int | None = None
+    manufacturer: str | None = None
+    model_number: str | None = None
+    purchase_value: float = 0
+    installed_at: datetime | None = None
+    warranty_expires_at: datetime | None = None
+    amc_expires_at: datetime | None = None
+    maintenance_cycle_days: int = 90
+    status: str = "active"
+
+
+class AssetRead(AssetCreate):
+    id: int
+    society_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InventoryItemCreate(BaseModel):
+    society_id: int | None = None
+    name: str
+    sku: str
+    category: str
+    location: str = "main store"
+    quantity: float = 0
+    min_quantity: float = 0
+    unit_cost: float = 0
+    vendor_id: int | None = None
+
+
+class InventoryItemUpdate(BaseModel):
+    name: str | None = None
+    category: str | None = None
+    location: str | None = None
+    quantity: float | None = None
+    min_quantity: float | None = None
+    unit_cost: float | None = None
+    vendor_id: int | None = None
+
+
+class InventoryItemRead(InventoryItemCreate):
+    id: int
+    society_id: int
+    updated_at: datetime
+    created_at: datetime
+    needs_reorder: bool = False
+    stock_value: float = 0
+
+    class Config:
+        from_attributes = True
+
+
+class PurchaseRequestCreate(BaseModel):
+    society_id: int | None = None
+    vendor_id: int | None = None
+    title: str
+    description: str | None = None
+    amount: float = 0
+    approval_level: str = "committee"
+
+
+class PurchaseRequestDecision(BaseModel):
+    status: str = Field(pattern="^(approved|rejected|pending)$")
+
+
+class PurchaseRequestRead(PurchaseRequestCreate):
+    id: int
+    society_id: int
+    requested_by_user_id: int
+    status: str
+    approved_by_user_id: int | None = None
+    approved_at: datetime | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StaffMemberCreate(BaseModel):
+    society_id: int | None = None
+    full_name: str
+    phone: str
+    role: str
+    department: str | None = None
+    shift_name: str | None = None
+    id_proof_type: str | None = None
+    id_proof_number: str | None = None
+    passcode: str | None = None
+    is_active: bool = True
+
+
+class StaffMemberRead(StaffMemberCreate):
+    id: int
+    society_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StaffAttendanceCreate(BaseModel):
+    society_id: int | None = None
+    staff_member_id: int
+    status: str = "present"
+
+
+class StaffAttendanceRead(StaffAttendanceCreate):
+    id: int
+    society_id: int
+    check_in_at: datetime
+    check_out_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class VehicleCreate(BaseModel):
+    society_id: int | None = None
+    unit_id: int | None = None
+    owner_user_id: int | None = None
+    registration_number: str
+    vehicle_type: str = "car"
+    sticker_number: str | None = None
+    parking_slot: str | None = None
+    is_active: bool = True
+
+
+class VehicleRead(VehicleCreate):
+    id: int
+    society_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GatePassCreate(BaseModel):
+    society_id: int | None = None
+    issued_to_name: str
+    issued_to_phone: str | None = None
+    pass_type: str = "material"
+    purpose: str | None = None
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+
+
+class GatePassRead(GatePassCreate):
+    id: int
+    society_id: int
+    status: str
+    valid_from: datetime
+    created_by_user_id: int | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AmenityBookingCreate(BaseModel):
+    society_id: int | None = None
+    amenity_name: str
+    unit_id: int | None = None
+    resident_user_id: int | None = None
+    starts_at: datetime
+    ends_at: datetime
+    amount: float = 0
+    status: str = "booked"
+    payment_status: str = "unpaid"
+
+
+class AmenityBookingRead(AmenityBookingCreate):
+    id: int
+    society_id: int
+    resident_user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ComplianceEventCreate(BaseModel):
+    society_id: int | None = None
+    event_type: str
+    title: str
+    description: str | None = None
+    status: str = "open"
+    due_at: datetime | None = None
+
+
+class ComplianceEventRead(ComplianceEventCreate):
+    id: int
+    society_id: int
+    closed_at: datetime | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OperationsOverview(BaseModel):
+    assets_total: int
+    assets_with_amc_due: int
+    inventory_items: int
+    inventory_reorder_alerts: int
+    staff_active: int
+    staff_checked_in_today: int
+    registered_vehicles: int
+    active_gate_passes: int
+    open_purchase_requests: int
+    amenity_bookings_upcoming: int
+    open_compliance_events: int
+    privacy_events_open: int
+    low_stock_items: list[InventoryItemRead]
+    upcoming_amc_assets: list[AssetRead]
 
 
 class TicketCreate(BaseModel):

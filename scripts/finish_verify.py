@@ -1,6 +1,6 @@
 import requests
 BASE = "http://127.0.0.1:8000/api/v1"
-email = "avinash210790@gmail.com"
+email = "admin@gmail.com"
 try:
     with open('scripts/last_admin_code.txt') as f:
         content = f.read().strip()

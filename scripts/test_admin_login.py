@@ -2,7 +2,7 @@ import requests
 import time
 BASE = "http://127.0.0.1:8000/api/v1"
 
-email = "avinash210790@gmail.com"
+email = "admin@gmail.com"
 password = "Admin@123"
 
 # Login

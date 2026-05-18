@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.enums import Role
-from app.models.entities import AIAutomationJob, AuditLog, ERPRecord, IntegrationEndpoint, Notification, Tenant, User, WorkflowDefinition
+from app.core.security import hash_password
+from app.models.entities import AIAutomationJob, AuditLog, ERPRecord, IntegrationEndpoint, Notification, Society, Tenant, User, WorkflowDefinition
 from app.schemas.dto import (
     AIAutomationJobRead,
     ERPRecordCreate,
@@ -262,6 +263,115 @@ def notification_center(current_user: User = Depends(get_current_user), db: Sess
 def seed_society_demo(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != Role.ADMIN:
         raise HTTPException(status_code=403, detail="Developer admin access required")
+
+    demo_society = db.query(Society).filter(Society.name == "Green Valley Apartments").first()
+    if not demo_society:
+        demo_society = Society(
+            name="Green Valley Apartments",
+            address="123 Main Street, Mumbai, Maharashtra 400001",
+            city="Mumbai",
+            state="Maharashtra",
+            pincode="400001",
+            admin_contact_name="Green Valley Admin",
+            admin_contact_email="admin@society.com",
+            admin_contact_phone="9999999999",
+            is_approved=True,
+            approved_at=datetime.utcnow(),
+        )
+        db.add(demo_society)
+        db.flush()
+
+    sample_users = [
+        {
+            "full_name": "Society Admin",
+            "email": "admin@society.com",
+            "phone": "9999999999",
+            "password": "admin123",
+            "role": Role.SOCIETY_ADMIN,
+            "is_active": True,
+            "access_erp": True,
+            "access_gatekeeper": True,
+            "access_billing": True,
+            "access_payments": True,
+            "access_communications": True,
+            "access_reports": True,
+            "access_documents": True,
+            "access_visitor_management": True,
+        },
+        {
+            "full_name": "Society Gatekeeper",
+            "email": "gatekeeper@society.com",
+            "phone": "9999990001",
+            "password": "gate123",
+            "role": Role.GATEKEEPER,
+            "is_active": True,
+            "access_gatekeeper": True,
+            "access_visitor_management": True,
+        },
+        {
+            "full_name": "Priya Sharma",
+            "email": "resident1@society.com",
+            "phone": "9000000001",
+            "password": "resident123",
+            "role": Role.RESIDENT,
+            "is_active": True,
+        },
+        {
+            "full_name": "Rahul Verma",
+            "email": "resident2@society.com",
+            "phone": "9000000002",
+            "password": "resident123",
+            "role": Role.RESIDENT,
+            "is_active": True,
+        },
+        {
+            "full_name": "Anjali Patel",
+            "email": "resident3@society.com",
+            "phone": "9000000003",
+            "password": "resident123",
+            "role": Role.RESIDENT,
+            "is_active": True,
+        },
+        {
+            "full_name": "Vikram Singh",
+            "email": "resident4@society.com",
+            "phone": "9000000004",
+            "password": "resident123",
+            "role": Role.RESIDENT,
+            "is_active": True,
+        },
+        {
+            "full_name": "Sneha Reddy",
+            "email": "resident5@society.com",
+            "phone": "9000000005",
+            "password": "resident123",
+            "role": Role.RESIDENT,
+            "is_active": True,
+        },
+    ]
+
+    for user_data in sample_users:
+        existing_user = db.query(User).filter(User.email == user_data["email"]).first()
+        if not existing_user:
+            db.add(
+                User(
+                    full_name=user_data["full_name"],
+                    email=user_data["email"],
+                    phone=user_data["phone"],
+                    password_hash=hash_password(user_data["password"]),
+                    role=user_data["role"],
+                    society_id=demo_society.id,
+                    is_active=user_data["is_active"],
+                    access_erp=user_data.get("access_erp", False),
+                    access_gatekeeper=user_data.get("access_gatekeeper", False),
+                    access_billing=user_data.get("access_billing", False),
+                    access_payments=user_data.get("access_payments", False),
+                    access_communications=user_data.get("access_communications", False),
+                    access_reports=user_data.get("access_reports", False),
+                    access_documents=user_data.get("access_documents", False),
+                    access_visitor_management=user_data.get("access_visitor_management", False),
+                )
+            )
 
     tenant = db.query(Tenant).filter(Tenant.slug == "green-heights-rwa").first()
     if not tenant:

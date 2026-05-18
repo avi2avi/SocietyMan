@@ -31,7 +31,7 @@
 **Option B: Use Existing Test Account**
 ```
 1. Click "Society Admin Login"
-2. Email/Phone: avinash210790@gmail.com
+2. Email/Phone: admin@gmail.com
 3. Password: Admin@123
 4. Verify with code from: scripts/last_admin_code.txt
 5. Go to Members → Pending Residents

@@ -195,6 +195,17 @@ export default function App() {
   }, [token]);
 
   useEffect(() => {
+    if (user?.role === "society_admin" && user?.society_id && !selectedSocietyId) {
+      setSelectedSocietyId(user.society_id);
+    }
+  }, [user, selectedSocietyId]);
+
+  useEffect(() => {
+    if (!token || !selectedSocietyId) return;
+    fetchSocietyUsers(selectedSocietyId);
+  }, [token, selectedSocietyId]);
+
+  useEffect(() => {
     if (!token || !user) return;
     if (user.role === "admin" && selectedSocietyId) {
       fetchBillHeads(selectedSocietyId);
@@ -318,6 +329,22 @@ export default function App() {
       setAdminTickets(res.data || []);
     } catch (error) {
       setAdminTickets([]);
+    }
+  };
+
+  const seedDemoData = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.post(`${API_BASE}/erp/demo/seed`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage(res.data.message || "Demo data seeded successfully.");
+      loadSocieties();
+      fetchAdminOverview();
+      fetchDashboard();
+      fetchOperationsOverview(selectedSocietyId);
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Failed to seed demo data.");
     }
   };
 
@@ -1019,7 +1046,7 @@ export default function App() {
       { label: "General Ledger", key: "generalLedger" },
       { label: "Utility Tracker", key: "utilityTracker" },
     ] },
-    { label: "ADDA Gatekeeper", key: "addaGatekeeper", subItems: [
+    { label: "Society GateKeeper", key: "addaGatekeeper", subItems: [
       { label: "Gatekeeper activity", key: "gatekeeperActivity" },
     ] },
     { label: "Society Operations", key: "erpOperations", subItems: [
@@ -1187,7 +1214,10 @@ export default function App() {
         </div>
         <div className="workspace-actions">
           {user?.role === "admin" && (
-            <button className="primary-button" onClick={() => updateView("developerPanel")}>Open Developer Panel</button>
+            <>
+              <button className="primary-button" onClick={() => updateView("developerPanel")}>Open Developer Panel</button>
+              <button className="secondary-button" onClick={seedDemoData}>Seed demo data</button>
+            </>
           )}
           {user?.role === "society_admin" && (
             <button className="primary-button" onClick={() => setView("societyPanel")}>Open Society Panel</button>
@@ -1793,7 +1823,7 @@ export default function App() {
           <article className="panel card-panel">
             <div className="section-heading-row light">
               <div>
-                <p className="eyebrow">ADDA gatekeeper</p>
+                <p className="eyebrow">Society GateKeeper</p>
                 <h3>Gate and visitor operations</h3>
               </div>
               <button className="secondary-button" type="button" onClick={() => fetchOperationsOverview()}>
@@ -1925,7 +1955,7 @@ export default function App() {
         return renderOperationsHealth();
       case "allMembers":
         return (
-          <article className="panel card-panel ag-theme-alpine grid-panel">
+          <article className="panel card-panel grid-panel">
             <div className="section-heading-row light">
               <div>
                 <p className="eyebrow">Members</p>
@@ -1934,8 +1964,9 @@ export default function App() {
               <button className="secondary-button" type="button" onClick={() => setSocietySection("addMember")}>Add Member</button>
             </div>
             {societyUsers.length > 0 ? (
-              <div className="ag-grid-wrapper">
+              <div className="ag-grid-wrapper ag-theme-alpine">
                 <AgGridReact
+                  domLayout="autoHeight"
                   rowData={societyUsers}
                   columnDefs={[
                     { field: "full_name", headerName: "Name", flex: 1 },
@@ -1950,6 +1981,7 @@ export default function App() {
                     },
                   ]}
                   defaultColDef={{ sortable: true, filter: true, resizable: true, minWidth: 100 }}
+                  style={{ width: "100%", minHeight: "320px" }}
                 />
               </div>
             ) : (

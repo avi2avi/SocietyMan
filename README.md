@@ -71,7 +71,7 @@ uvicorn app.main:app --reload
 API docs: `http://127.0.0.1:8000/docs`
 
 > Developer admin account created on startup when missing:
-> - Email: `avinash210790@gmail.com`
+> - Email: `admin@gmail.com`
 > - Password: `Admin@123`
 > - Verification code is emailed or written to `scripts/last_admin_code.txt` when SMTP is not configured.
 >

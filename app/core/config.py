@@ -34,7 +34,7 @@ class Settings(BaseModel):
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")    
     access_token_expiry_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRY_MINUTES", "30"))
     refresh_token_expiry_days: int = int(os.getenv("REFRESH_TOKEN_EXPIRY_DAYS", "30"))
-    default_admin_email: str = os.getenv("DEFAULT_ADMIN_EMAIL", "avinash210790@gmail.com")
+    default_admin_email: str = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@gmail.com")
     default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@123")
     default_admin_name: str = os.getenv("DEFAULT_ADMIN_NAME", "Developer Admin")
     default_admin_phone: str = os.getenv("DEFAULT_ADMIN_PHONE", "0000000000")

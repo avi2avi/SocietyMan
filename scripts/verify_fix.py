@@ -8,7 +8,7 @@ print("=== Testing Full Admin Login & Data Flow ===\n")
 # Step 1: Login
 print("1. Admin login...")
 login_res = requests.post(f"{API_BASE}/auth/login", json={
-    "email": "avinash210790@gmail.com",
+    "email": "admin@gmail.com",
     "password": "Admin@123"
 })
 print(f"   Status: {login_res.status_code}")
@@ -26,7 +26,7 @@ with open("scripts/last_admin_code.txt", "r") as f:
 # Step 3: Verify
 print("\n3. Verifying admin...")
 verify_res = requests.post(f"{API_BASE}/auth/verify", json={
-    "email": "avinash210790@gmail.com",
+    "email": "admin@gmail.com",
     "code": code
 })
 print(f"   Status: {verify_res.status_code}")

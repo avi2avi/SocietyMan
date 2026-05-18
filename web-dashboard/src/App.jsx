@@ -48,60 +48,53 @@ const defaultLoginForm = { email: "", phone: "", password: "" };
 
 const societyWorkbenchModules = [
   {
-    key: "gate-security",
-    title: "Gate & Visitors",
+    key: "dashboard",
+    title: "Dashboard",
     status: "Live API",
-    summary: "Visitor entry/exit, OTP/QR hooks, delivery logs, guard workflows, and gate passes.",
-    metrics: ["Today visitors", "Active gate passes", "Guard activity"],
+    summary: "SMS, Notifications, and Announcements management for real-time community communication.",
+    metrics: ["SMS sent", "Notifications", "Announcements"],
   },
   {
-    key: "residents-units",
-    title: "Residents, Units & Tenants",
+    key: "units-users",
+    title: "Units & Users Management",
     status: "Live API",
-    summary: "Society onboarding, unit master, resident approvals, tenant records, and family contacts.",
-    metrics: ["Approved residents", "Pending residents", "Society users"],
+    summary: "323 users and 293 units with resident approvals, tenant records, and family management.",
+    metrics: ["Total users", "Total units", "Active residents"],
   },
   {
-    key: "billing-accounting",
-    title: "Maintenance Billing",
+    key: "accounting",
+    title: "Accounting",
     status: "Live API",
-    summary: "Monthly invoices, resident dues, online payments, collections, vendor payables, and reports.",
-    metrics: ["Collected", "Pending dues", "Vendor payables"],
+    summary: "Income Tracker, Expense Tracker, Bank & Cash management with detailed financial reports.",
+    metrics: ["Total income", "Total expenses", "Bank balance"],
+  },
+  {
+    key: "management",
+    title: "Management Modules",
+    status: "Live API",
+    summary: "Amenity & Events, Projects & Meetings, Assets & Inventory, and Announcements management.",
+    metrics: ["Events", "Projects", "Assets"],
+  },
+  {
+    key: "staff-parking",
+    title: "Staff Manager & Parking Manager",
+    status: "Live API",
+    summary: "Staff management, daily help tracking, vehicle registry, parking slots, and Move In/Out Tracker.",
+    metrics: ["Active staff", "Parked vehicles", "Move-ins/outs"],
+  },
+  {
+    key: "utilities-gatekeeper",
+    title: "Utility Tracker & Society GateKeeper",
+    status: "Live API",
+    summary: "Utility tracking with ADDA GateKeeper security solution for visitor entry/exit and gate management.",
+    metrics: ["Utility usage", "Visitors", "Gate passes"],
   },
   {
     key: "helpdesk",
-    title: "Complaints & Helpdesk",
+    title: "Helpdesk Tracker",
     status: "Live API",
-    summary: "Resident complaints, assignment, status tracking, staff/vendor routing, and closure updates.",
-    metrics: ["Open tickets", "Assigned vendors", "SLA watch"],
-  },
-  {
-    key: "staff-vehicles",
-    title: "Staff, Vehicles & Parking",
-    status: "Live API",
-    summary: "Daily help, staff attendance, vehicle registry, stickers, parking slots, and movement controls.",
-    metrics: ["Active staff", "Checked in", "Vehicles"],
-  },
-  {
-    key: "amenities-assets",
-    title: "Amenities, Assets & Inventory",
-    status: "Live API",
-    summary: "Facility bookings, AMC reminders, stock levels, reorder alerts, and purchase approvals.",
-    metrics: ["Bookings", "AMC due", "Reorder alerts"],
-  },
-  {
-    key: "communication",
-    title: "Notices & Documents",
-    status: "Foundation",
-    summary: "Announcements, email/WhatsApp hooks, society documents, circulars, and resident communication.",
-    metrics: ["Notices", "Documents", "Messages"],
-  },
-  {
-    key: "committee",
-    title: "Committee Controls",
-    status: "Foundation",
-    summary: "Module access, admin approvals, compliance events, privacy requests, audit logs, and exports.",
-    metrics: ["Approvals", "Privacy events", "Reports"],
+    summary: "Request management, complaint tracking, assignment, status tracking, and closure updates.",
+    metrics: ["Open requests", "Assigned", "Resolved"],
   },
 ];
 
@@ -1281,12 +1274,14 @@ export default function App() {
         );
       case "allSocieties":
         return (
-          <article className="panel card-panel ag-theme-alpine grid-panel">
+          <article className="panel card-panel grid-panel">
             <h3>All societies</h3>
             {adminSocieties.length > 0 ? (
-              <div className="ag-grid-wrapper">
-                <AgGridReact
-                  rowData={adminSocieties}
+                  <div className="ag-grid-wrapper ag-theme-alpine">
+                    <AgGridReact
+                      domLayout="autoHeight"
+                      style={{ width: "100%", minHeight: "320px" }}
+                      rowData={adminSocieties}
                   columnDefs={[
                     { field: "name", headerName: "Society", flex: 1 },
                     { field: "city", headerName: "City", flex: 1 },
@@ -1312,12 +1307,14 @@ export default function App() {
         );
       case "allUsers":
         return (
-          <article className="panel card-panel ag-theme-alpine grid-panel">
+          <article className="panel card-panel grid-panel">
             <h3>All users</h3>
             {adminUsers.length > 0 ? (
-              <div className="ag-grid-wrapper">
-                <AgGridReact
-                  rowData={adminUsers}
+                  <div className="ag-grid-wrapper ag-theme-alpine">
+                    <AgGridReact
+                      domLayout="autoHeight"
+                      style={{ width: "100%", minHeight: "320px" }}
+                      rowData={adminUsers}
                   columnDefs={[
                     { field: "full_name", headerName: "Name", flex: 1 },
                     { field: "email", headerName: "Email", flex: 1 },

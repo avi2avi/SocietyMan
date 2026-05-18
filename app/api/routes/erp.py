@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.core.enums import Role
+from app.core.enums import Role, VisitorType, PaymentMethod, PaymentProvider
 from app.core.security import hash_password
-from app.models.entities import AIAutomationJob, AuditLog, ERPRecord, IntegrationEndpoint, Notification, Society, Tenant, User, WorkflowDefinition
+from app.models.entities import AIAutomationJob, AuditLog, ERPRecord, IntegrationEndpoint, Invoice, Notification, Payment, ResidentProfile, Society, Tenant, Unit, User, VisitorLog, WorkflowDefinition
 from app.schemas.dto import (
     AIAutomationJobRead,
     ERPRecordCreate,
@@ -398,6 +398,225 @@ def seed_society_demo(current_user: User = Depends(get_current_user), db: Sessio
     db.add(Notification(user_id=current_user.id, tenant_key="platform", title="Society demo seeded", body="Helpdesk, inventory, billing, AI, and committee workflow demo records are ready.", channel="in-app"))
     db.commit()
     return {"status": "ok", "message": "Society ERP demo data seeded"}
+
+
+@router.post("/demo/comprehensive-seed")
+def seed_comprehensive_data(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create 5+ societies with 50+ members, units, visitor logs, and bills for last 12 months"""
+    if current_user.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Developer admin access required")
+
+    # Define 5 societies with their details
+    societies_data = [
+        {
+            "name": "Green Valley Apartments",
+            "address": "123 Main Street, Bandra",
+            "city": "Mumbai",
+            "state": "Maharashtra",
+            "pincode": "400050",
+            "admin_email": "admin@greenvalle.com",
+        },
+        {
+            "name": "Skyline Towers",
+            "address": "456 Business Road, Gurgaon",
+            "city": "Gurgaon",
+            "state": "Haryana",
+            "pincode": "122001",
+            "admin_email": "admin@skyline.com",
+        },
+        {
+            "name": "Westend Park",
+            "address": "789 Park Avenue, Bangalore",
+            "city": "Bangalore",
+            "state": "Karnataka",
+            "pincode": "560001",
+            "admin_email": "admin@westend.com",
+        },
+        {
+            "name": "Riverside Heights",
+            "address": "321 River Road, Delhi",
+            "city": "Delhi",
+            "state": "Delhi",
+            "pincode": "110001",
+            "admin_email": "admin@riverside.com",
+        },
+        {
+            "name": "Pearl Residency",
+            "address": "654 Marine Drive, Chennai",
+            "city": "Chennai",
+            "state": "Tamil Nadu",
+            "pincode": "600001",
+            "admin_email": "admin@pearl.com",
+        },
+    ]
+
+    created_societies = []
+    total_members = 0
+    total_visitors = 0
+    total_bills = 0
+
+    for society_data in societies_data:
+        # Check if society already exists
+        existing_society = db.query(Society).filter(Society.name == society_data["name"]).first()
+        if existing_society:
+            created_societies.append(existing_society)
+            continue
+
+        # Create society
+        society = Society(
+            name=society_data["name"],
+            address=society_data["address"],
+            city=society_data["city"],
+            state=society_data["state"],
+            pincode=society_data["pincode"],
+            admin_contact_name=f"{society_data['name']} Admin",
+            admin_contact_email=society_data["admin_email"],
+            admin_contact_phone="9999999999",
+            is_approved=True,
+            approved_at=datetime.utcnow(),
+        )
+        db.add(society)
+        db.flush()
+        created_societies.append(society)
+
+        # Create units for this society (10 units)
+        units_per_society = []
+        buildings = ["Tower A", "Tower B"]
+        for building in buildings:
+            for unit_num in range(1, 6):
+                unit = Unit(
+                    building=building,
+                    unit_number=f"{unit_num}01",
+                    unit_type="residential",
+                    parking_car_slots=1,
+                    parking_bike_slots=1,
+                )
+                db.add(unit)
+                db.flush()
+                units_per_society.append(unit)
+
+        # Create residents (10-12 per society) - total 50-60 members
+        first_names = ["Rajesh", "Priya", "Arun", "Sneha", "Vikram", "Anjali", "Rahul", "Neha", "Karan", "Pooja", "Deepak", "Zara"]
+        last_names = ["Sharma", "Patel", "Verma", "Singh", "Reddy", "Kumar", "Nair", "Iyer", "Gupta", "Desai"]
+
+        for idx, (first_name, last_name) in enumerate([(first_names[i], last_names[i % len(last_names)]) for i in range(10)]):
+            email = f"resident{idx+1}@{society_data['name'].lower().replace(' ', '')}.com"
+            phone = f"9{9000000000 + idx}"
+
+            # Check if user already exists
+            existing_user = db.query(User).filter(User.email == email).first()
+            if existing_user:
+                continue
+
+            # Create resident user
+            user = User(
+                full_name=f"{first_name} {last_name}",
+                email=email,
+                phone=phone,
+                password_hash=hash_password("resident123"),
+                role=Role.RESIDENT,
+                society_id=society.id,
+                is_active=True,
+            )
+            db.add(user)
+            db.flush()
+            total_members += 1
+
+            # Create resident profile with unit assignment
+            resident_profile = ResidentProfile(
+                user_id=user.id,
+                unit_id=units_per_society[idx % len(units_per_society)].id,
+                occupancy_type="owner",
+                move_in_date=datetime.utcnow() - timedelta(days=365),
+            )
+            db.add(resident_profile)
+
+            # Create visitor logs for this resident (2-3 visitors in past 12 months)
+            visitor_types = [VisitorType.GUEST, VisitorType.DELIVERY]
+            visitor_names = ["Friend", "Delivery Boy", "Family Member", "Service Provider", "Guest"]
+            for visitor_idx in range(2):
+                entry_date = datetime.utcnow() - timedelta(days=365 - (visitor_idx * 60))
+                visitor = VisitorLog(
+                    resident_user_id=user.id,
+                    visitor_name=visitor_names[visitor_idx % len(visitor_names)],
+                    visitor_phone=f"98{7000000 + visitor_idx:07d}",
+                    visitor_type=visitor_types[visitor_idx % len(visitor_types)],
+                    purpose=f"Visit {visitor_idx + 1}",
+                    entry_at=entry_date,
+                    exit_at=entry_date + timedelta(hours=2),
+                )
+                db.add(visitor)
+                total_visitors += 1
+
+            # Create invoices for last 12 months (12 bills per resident)
+            for month_offset in range(12):
+                invoice_date = datetime.utcnow() - timedelta(days=30 * (11 - month_offset))
+                billing_month = invoice_date.strftime("%Y-%m")
+
+                # Check if invoice already exists
+                existing_invoice = db.query(Invoice).filter(
+                    Invoice.unit_id == units_per_society[idx % len(units_per_society)].id,
+                    Invoice.billing_month == billing_month
+                ).first()
+                if existing_invoice:
+                    continue
+
+                # Create invoice
+                maintenance_charge = 3500
+                parking_charge = 500
+                special_levy = 1000 if month_offset % 3 == 0 else 0
+                late_penalty = 0
+                adjustments = -500 if month_offset % 4 == 0 else 0
+                total_amount = maintenance_charge + parking_charge + special_levy + late_penalty + adjustments
+
+                invoice = Invoice(
+                    unit_id=units_per_society[idx % len(units_per_society)].id,
+                    billing_month=billing_month,
+                    maintenance_charge=maintenance_charge,
+                    parking_charge=parking_charge,
+                    special_levy=special_levy,
+                    late_penalty=late_penalty,
+                    adjustments=adjustments,
+                    total_amount=total_amount,
+                    status="paid" if month_offset > 3 else ("pending" if month_offset < 2 else "unpaid"),
+                )
+                db.add(invoice)
+                db.flush()
+                total_bills += 1
+
+                # Create payment for some invoices (70% paid)
+                if month_offset > 3 and (month_offset % 3 != 0):  # Skip some months
+                    payment = Payment(
+                        invoice_id=invoice.id,
+                        amount=total_amount,
+                        method=PaymentMethod.UPI if month_offset % 2 == 0 else PaymentMethod.NET_BANKING,
+                        provider=PaymentProvider.RAZORPAY,
+                        provider_order_id=f"order_{invoice.id}_{month_offset}",
+                        provider_payment_id=f"pay_{invoice.id}_{month_offset}",
+                        reference_id=f"ref_{invoice.id}_{month_offset}",
+                        paid_at=invoice_date + timedelta(days=5),
+                    )
+                    db.add(payment)
+
+    # Create tenant record
+    tenant = db.query(Tenant).filter(Tenant.slug == "societyman-demo").first()
+    if not tenant:
+        tenant = Tenant(name="SocietyMan Demo", slug="societyman-demo", region="IN", plan="society-pro")
+        db.add(tenant)
+
+    db.commit()
+
+    return {
+        "status": "ok",
+        "message": "Comprehensive demo data seeded successfully",
+        "data": {
+            "societies_created": len(created_societies),
+            "total_members": total_members,
+            "total_visitor_logs": total_visitors,
+            "total_bills": total_bills,
+            "summary": f"Created {len(created_societies)} societies with {total_members} members, {total_visitors} visitor logs, and {total_bills} bills"
+        }
+    }
 
 
 @router.websocket("/ws/notifications/{user_id}")

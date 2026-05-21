@@ -445,3 +445,152 @@ class IntegrationEndpoint(Base):
     status: Mapped[str] = mapped_column(String(60), default="planned", index=True)
     webhook_url: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ============================================================
+# SOCIETY360 ENHANCEMENTS - Phase 1 Features
+# ============================================================
+
+
+class VisitorApproval(Base):
+    """Enhanced visitor pre-registration and approval system"""
+    __tablename__ = "visitor_approvals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    visitor_log_id: Mapped[int] = mapped_column(ForeignKey("visitor_logs.id"), nullable=False, index=True)
+    resident_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    approval_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)  # pending, approved, rejected
+    vehicle_number: Mapped[str | None] = mapped_column(String(20))
+    vehicle_type: Mapped[str | None] = mapped_column(String(30))  # car, bike, auto, etc.
+    parking_slot: Mapped[str | None] = mapped_column(String(20))
+    pass_number: Mapped[str | None] = mapped_column(String(20), unique=True)
+    approved_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(String(255))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MaintenanceCategory(Base):
+    """Categorization for maintenance requests"""
+    __tablename__ = "maintenance_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255))
+    icon: Mapped[str | None] = mapped_column(String(50))  # emoji or icon name
+    color: Mapped[str | None] = mapped_column(String(7))  # hex color
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MaintenanceWorkLog(Base):
+    """Track work progress on maintenance tickets"""
+    __tablename__ = "maintenance_work_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id"), nullable=False, index=True)
+    staff_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    hours_spent: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MaintenanceRating(Base):
+    """Resident feedback and rating for maintenance work"""
+    __tablename__ = "maintenance_ratings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id"), nullable=False, unique=True)
+    rating: Mapped[float] = mapped_column(Float, nullable=False)  # 1-5
+    feedback: Mapped[str | None] = mapped_column(Text)
+    rated_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AnnouncementEnhanced(Base):
+    """Enhanced announcement system with types and scheduling"""
+    __tablename__ = "announcements_enhanced"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    announcement_type: Mapped[str] = mapped_column(String(20), default="notice")  # notice, meeting, event
+    priority: Mapped[str] = mapped_column(String(20), default="medium", index=True)  # low, medium, high
+    published_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)  # draft, scheduled, published, archived
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime)  # for scheduled announcements
+    published_at: Mapped[datetime | None] = mapped_column(DateTime)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ForumPostEnhanced(Base):
+    """Enhanced forum with tags and moderation"""
+    __tablename__ = "forum_posts_enhanced"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(50), default="general", index=True)  # general, suggestions, complaints, etc.
+    author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    tags: Mapped[str] = mapped_column(String(255), default="")  # comma-separated tags
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)  # active, archived, hidden
+    is_moderated: Mapped[bool] = mapped_column(Boolean, default=False)
+    moderated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reply_count: Mapped[int] = mapped_column(Integer, default=0)
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    engagement_score: Mapped[float] = mapped_column(Float, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BillCycle(Base):
+    """Monthly billing cycles for automated bill generation"""
+    __tablename__ = "bill_cycles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    cycle_month: Mapped[str] = mapped_column(String(7), nullable=False)  # YYYY-MM
+    is_generated: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    generated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    bill_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Receipt(Base):
+    """Digital receipts for payments"""
+    __tablename__ = "receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    payment_id: Mapped[int] = mapped_column(ForeignKey("payments.id"), nullable=False, unique=True)
+    receipt_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    generated_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    pdf_url: Mapped[str | None] = mapped_column(String(255))
+
+
+class Amenity(Base):
+    """Community amenities for booking system"""
+    __tablename__ = "amenities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+    location: Mapped[str | None] = mapped_column(String(200))
+    rules: Mapped[str | None] = mapped_column(Text)
+    booking_price: Mapped[float] = mapped_column(Float, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+

@@ -3,6 +3,7 @@ import axios from "axios";
 import { AgGridReact } from "ag-grid-react";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
+import "./dashstyle.css";
 import "./styles.css";
 import ResidentDashboard from "./ResidentDashboard";
 import {
@@ -21,6 +22,9 @@ import {
   ParcelsListSection,
   PatrolsListSection,
   DomesticHelpSection,
+  ComplaintsSection,
+  VehicleLogsSection,
+  VisitorManagementSection,
 } from "./CommunitySections";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
@@ -52,7 +56,7 @@ const societyWorkbenchModules = [
     title: "Dashboard",
     status: "Live API",
     summary: "SMS, Notifications, and Announcements management for real-time community communication.",
-    metrics: ["SMS sent", "Notifications", "Announcements"],
+    metrics: ["SMS sent", "Notifications", "Anrvicesnouncements"],
   },
   {
     key: "units-users",
@@ -99,7 +103,17 @@ const societyWorkbenchModules = [
 ];
 
 export default function App() {
+  const [theme, setTheme] = useState(() => localStorage.getItem("sm_theme") || "light");
   const [view, setView] = useState("home");
+  
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("sm_theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
   const [societies, setSocieties] = useState([]);
   const [pendingSocieties, setPendingSocieties] = useState([]);
   const [pendingResidents, setPendingResidents] = useState([]);
@@ -133,7 +147,12 @@ export default function App() {
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [generatedInvoices, setGeneratedInvoices] = useState([]);
   const [invoiceSummary, setInvoiceSummary] = useState(null);
+  const [billingTab, setBillingTab] = useState("create");
+  const [importFile, setImportFile] = useState(null);
+  const [headerHtml, setHeaderHtml] = useState("");
+  const [footerHtml, setFooterHtml] = useState("");
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState("");
+  const [invoiceBillingMonthFilter, setInvoiceBillingMonthFilter] = useState("");
   const [billingTemplateMonth, setBillingTemplateMonth] = useState("");
   const [societyUsers, setSocietyUsers] = useState([]);
   const [selectedSocietyId, setSelectedSocietyId] = useState(null);
@@ -156,6 +175,57 @@ export default function App() {
   const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [editingUser, setEditingUser] = useState(null);
+  const [editUserForm, setEditUserForm] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    role: "",
+    society_id: "",
+    is_active: true,
+    password: "",
+  });
+  const [showAddMemberForm, setShowAddMemberForm] = useState(false);
+  const [addMemberForm, setAddMemberForm] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    password: "Resident@123",
+    role: "resident",
+  });
+  const [visitorForm, setVisitorForm] = useState({});
+  const [editingVisitor, setEditingVisitor] = useState(null);
+  const [paymentsList, setPaymentsList] = useState([]);
+  const [showAddSlotModal, setShowAddSlotModal] = useState(false);
+  const [slotForm, setSlotForm] = useState({ unit_id: "", slot_type: "car", count: 1 });
+
+  const openAddSlotModal = () => {
+    if (!units || units.length === 0) fetchUnits();
+    setShowAddSlotModal(true);
+  };
+  const closeAddSlotModal = () => { setShowAddSlotModal(false); setSlotForm({ unit_id: "", slot_type: "car", count: 1 }); };
+
+  const handleAddSlot = async () => {
+    setMessage("");
+    if (!token) { setMessage('Login required'); return; }
+    if (!slotForm.unit_id) { setMessage('Choose a unit'); return; }
+    try {
+      const unitId = Number(slotForm.unit_id);
+      const unitResp = await axios.get(`${API_BASE}/units`, { headers: { Authorization: `Bearer ${token}` } });
+      const unit = (units || unitResp.data || []).find(u => u.id === unitId);
+      if (!unit) { setMessage('Unit not found'); return; }
+      const payload = {};
+      if (slotForm.slot_type === 'car') payload.parking_car_slots = (unit.parking_car_slots || 0) + Number(slotForm.count || 1);
+      else payload.parking_bike_slots = (unit.parking_bike_slots || 0) + Number(slotForm.count || 1);
+      await axios.patch(`${API_BASE}/units/${unitId}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      setMessage('Slot(s) added');
+      closeAddSlotModal();
+      fetchUnits();
+      fetchOperationsOverview();
+    } catch (err) {
+      setMessage(err.response?.data?.detail || 'Failed to add slot');
+    }
+  };
 
   useEffect(() => {
     loadSocieties();
@@ -447,6 +517,135 @@ export default function App() {
     } catch (error) {
       setGeneratedInvoices([]);
     }
+  };
+
+  const fetchPayments = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API_BASE}/payments`, { headers: { Authorization: `Bearer ${token}` } });
+      setPaymentsList(res.data || []);
+    } catch (err) {
+      setPaymentsList([]);
+    }
+  };
+
+  const handleCreateVisitor = async () => {
+    setMessage("");
+    if (!token) {
+      setMessage("Login required to log visitor.");
+      return;
+    }
+    try {
+      const payload = { ...visitorForm };
+      const res = await axios.post(`${API_BASE}/visitors/entry`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage(`Visitor entry created (id=${res.data.id}).`);
+      setVisitorForm({});
+      setEditingVisitor(null);
+      fetchOperationsOverview();
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "Failed to create visitor entry.");
+    }
+  };
+
+  const handleUpdateVisitor = async () => {
+    if (!editingVisitor) return;
+    setMessage("");
+    if (!token) {
+      setMessage("Login required to update visitor.");
+      return;
+    }
+    try {
+      const payload = { ...visitorForm };
+      const res = await axios.patch(`${API_BASE}/visitors/${editingVisitor.id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage(`Visitor entry updated (id=${res.data.id}).`);
+      setVisitorForm({});
+      setEditingVisitor(null);
+      fetchOperationsOverview();
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "Failed to update visitor entry.");
+    }
+  };
+
+  const handlePreviewInvoice = async (invoiceId) => {
+    if (!token) { setMessage('Login required'); return; }
+    try {
+      const res = await axios.get(`${API_BASE}/billing-advanced/invoices/${invoiceId}/export`, { headers: { Authorization: `Bearer ${token}` }, responseType: 'text' });
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.open();
+        win.document.write(res.data);
+        win.document.close();
+      } else {
+        setMessage('Unable to open preview window.');
+      }
+    } catch (err) {
+      setMessage(err.response?.data?.detail || 'Failed to load invoice preview.');
+    }
+  };
+
+  const handleExportInvoicesCSV = async () => {
+    if (!token) { setMessage('Login required'); return; }
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    if (!societyId) { setMessage('Select a society first'); return; }
+    const params = new URLSearchParams();
+    params.set('society_id', societyId);
+    if (invoiceStatusFilter) params.set('status', invoiceStatusFilter);
+    if (invoiceBillingMonthFilter) params.set('billing_month', invoiceBillingMonthFilter);
+    try {
+      const res = await axios.get(`${API_BASE}/billing-advanced/invoices/export?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'invoices.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setMessage('Invoice CSV downloaded');
+    } catch (err) {
+      setMessage(err.response?.data?.detail || 'Failed to export invoices');
+    }
+  };
+
+  const handleExportInvoicesXLSX = async () => {
+    if (!token) { setMessage('Login required'); return; }
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    if (!societyId) { setMessage('Select a society first'); return; }
+    const params = new URLSearchParams();
+    params.set('society_id', societyId);
+    if (invoiceStatusFilter) params.set('status', invoiceStatusFilter);
+    if (invoiceBillingMonthFilter) params.set('billing_month', invoiceBillingMonthFilter);
+    try {
+      const res = await axios.get(`${API_BASE}/billing-advanced/invoices/export.xlsx?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'invoices.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setMessage('Invoice XLSX downloaded');
+    } catch (err) {
+      setMessage(err.response?.data?.detail || 'Failed to export invoices');
+    }
+  };
+
+  const handleApplyInvoiceFilters = async () => {
+    const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+    if (!societyId) { setMessage('Select a society first'); return; }
+    await fetchInvoices({ society_id: societyId, status: invoiceStatusFilter, billing_month: invoiceBillingMonthFilter });
+    fetchInvoiceSummary(societyId);
   };
 
   const handleSetupDefaultHeads = async () => {
@@ -980,6 +1179,76 @@ export default function App() {
     }
   };
 
+  const openEditUserModal = (userData) => {
+    setEditingUser(userData);
+    setEditUserForm({
+      full_name: userData.full_name || "",
+      phone: userData.phone || "",
+      email: userData.email || "",
+      role: userData.role || "",
+      society_id: userData.society_id || "",
+      is_active: userData.is_active !== undefined ? userData.is_active : true,
+      password: "",
+    });
+  };
+
+  const closeEditUserModal = () => {
+    setEditingUser(null);
+    setEditUserForm({ full_name: "", phone: "", email: "", role: "", society_id: "", is_active: true, password: "" });
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+    setMessage("");
+    try {
+      const payload = {};
+      if (editUserForm.full_name) payload.full_name = editUserForm.full_name;
+      if (editUserForm.phone) payload.phone = editUserForm.phone;
+      if (editUserForm.email) payload.email = editUserForm.email;
+      if (editUserForm.role) payload.role = editUserForm.role;
+      if (editUserForm.society_id) payload.society_id = Number(editUserForm.society_id);
+      payload.is_active = editUserForm.is_active;
+      if (editUserForm.password) payload.password = editUserForm.password;
+
+      const res = await axios.patch(`${API_BASE}/users/${editingUser.id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage(`User "${res.data.full_name}" updated successfully.`);
+      // Refresh the appropriate user list
+      if (user?.role === "admin") {
+        fetchAdminOverview();
+        if (selectedSocietyId) fetchSocietyUsers(selectedSocietyId);
+      } else if (user?.role === "society_admin") {
+        fetchSocietyUsers(user.society_id);
+      }
+      closeEditUserModal();
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "Failed to update user.");
+    }
+  };
+
+  const handleSocietyAddMember = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    if (!addMemberForm.full_name || !addMemberForm.phone || !addMemberForm.email) {
+      setMessage("Please fill in name, email, and phone.");
+      return;
+    }
+    try {
+      await axios.post(`${API_BASE}/users/register`, {
+        ...addMemberForm,
+        society_id: user.society_id,
+        role: "resident",
+      });
+      setMessage(`Member "${addMemberForm.full_name}" added. They will need approval before login.`);
+      setAddMemberForm({ full_name: "", phone: "", email: "", password: "Resident@123", role: "resident" });
+      setShowAddMemberForm(false);
+      fetchSocietyUsers(user.society_id);
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "Failed to add member.");
+    }
+  };
+
   const handleLogout = () => {
     clearSession();
     setView("home");
@@ -1310,26 +1579,52 @@ export default function App() {
           <article className="panel card-panel grid-panel">
             <h3>All users</h3>
             {adminUsers.length > 0 ? (
-                  <div className="ag-grid-wrapper ag-theme-alpine">
-                    <AgGridReact
-                      domLayout="autoHeight"
-                      style={{ width: "100%", minHeight: "320px" }}
-                      rowData={adminUsers}
-                  columnDefs={[
-                    { field: "full_name", headerName: "Name", flex: 1 },
-                    { field: "email", headerName: "Email", flex: 1 },
-                    { field: "phone", headerName: "Phone", flex: 1 },
-                    { field: "role", headerName: "Role", flex: 1 },
-                    {
-                      field: "is_active",
-                      headerName: "Active",
-                      valueFormatter: (params) => (params.value ? "Yes" : "No"),
-                      flex: 1,
-                    },
-                    { field: "society_id", headerName: "Society ID", flex: 1 },
-                  ]}
-                  defaultColDef={{ sortable: true, filter: true, resizable: true, minWidth: 120 }}
-                />
+              <div>
+                <div className="ag-grid-wrapper ag-theme-alpine">
+                  <AgGridReact
+                    domLayout="autoHeight"
+                    style={{ width: "100%", minHeight: "320px" }}
+                    rowData={adminUsers}
+                    columnDefs={[
+                      { field: "full_name", headerName: "Name", flex: 1 },
+                      { field: "email", headerName: "Email", flex: 1 },
+                      { field: "phone", headerName: "Phone", flex: 1 },
+                      { field: "role", headerName: "Role", flex: 1 },
+                      {
+                        field: "is_active",
+                        headerName: "Active",
+                        valueFormatter: (params) => (params.value ? "Yes" : "No"),
+                        flex: 1,
+                      },
+                      { field: "society_id", headerName: "Society ID", flex: 1 },
+                    ]}
+                    defaultColDef={{ sortable: true, filter: true, resizable: true, minWidth: 120 }}
+                  />
+                </div>
+                <div className="section-heading-row light" style={{ marginTop: "1rem" }}>
+                  <h4>Actions</h4>
+                </div>
+                <div className="table-card">
+                  <div className="table-row table-header">
+                    <span>Name</span>
+                    <span>Email</span>
+                    <span>Role</span>
+                    <span>Actions</span>
+                  </div>
+                  {adminUsers.map((u) => (
+                    <div key={u.id} className="table-row">
+                      <span>{u.full_name}</span>
+                      <span>{u.email}</span>
+                      <span>{u.role}</span>
+                      <span className="actions-column">
+                        <button className="secondary-button" onClick={() => openEditUserModal(u)}>Edit</button>
+                        <button className="secondary-button" onClick={() => toggleUserActive(u)}>
+                          {u.is_active ? "Disable" : "Enable"}
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <p>No users loaded.</p>
@@ -1828,6 +2123,38 @@ export default function App() {
               </button>
             </div>
             {operationsOverview ? (
+              <>
+              <div className="visitor-panel">
+                <h4>Log Visitor</h4>
+                <div className="field-group">
+                  <label>Resident User ID</label>
+                  <input type="number" value={visitorForm.resident_user_id || ""} onChange={(e)=> setVisitorForm({...visitorForm, resident_user_id: Number(e.target.value)})} />
+                </div>
+                <div className="field-group">
+                  <label>Visitor Name</label>
+                  <input value={visitorForm.visitor_name || ""} onChange={(e)=> setVisitorForm({...visitorForm, visitor_name: e.target.value})} />
+                </div>
+                <div className="field-group">
+                  <label>Visitor Phone</label>
+                  <input value={visitorForm.visitor_phone || ""} onChange={(e)=> setVisitorForm({...visitorForm, visitor_phone: e.target.value})} />
+                </div>
+                <div className="field-group">
+                  <label>Type</label>
+                  <select value={visitorForm.visitor_type || "guest"} onChange={(e)=> setVisitorForm({...visitorForm, visitor_type: e.target.value})}>
+                    <option value="guest">Guest</option>
+                    <option value="delivery">Delivery</option>
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label>Purpose</label>
+                  <input value={visitorForm.purpose || ""} onChange={(e)=> setVisitorForm({...visitorForm, purpose: e.target.value})} />
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  <button className="primary-button" onClick={() => handleCreateVisitor()}>Create Entry</button>
+                  {editingVisitor && <button className="secondary-button" onClick={() => handleUpdateVisitor()}>Save</button>}
+                </div>
+                <hr />
+              </div>
               <div className="operations-metric-grid">
                 {[
                   ["Today visitors", dashboard?.visitor_activity ?? 0],
@@ -1841,6 +2168,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
+              </>
             ) : (
               <p>Loading gatekeeper metrics…</p>
             )}
@@ -1879,7 +2207,7 @@ export default function App() {
                   <span>Modules</span>
                   <span>Actions</span>
                 </div>
-                {societyUsers.map((userItem) => (
+                  {societyUsers.map((userItem) => (
                   <div key={userItem.id} className="table-row">
                     <span>{userItem.full_name}</span>
                     <span>{userItem.role}</span>
@@ -1895,6 +2223,7 @@ export default function App() {
                       {userItem.access_visitor_management && <strong>Visitor</strong>}
                     </span>
                     <span className="actions-column">
+                      <button className="secondary-button" onClick={() => openEditUserModal(userItem)}>Edit</button>
                       <button className="secondary-button" onClick={() => toggleUserActive(userItem)}>
                         {userItem.is_active ? "Disable" : "Enable"}
                       </button>
@@ -1958,28 +2287,69 @@ export default function App() {
                 <p className="eyebrow">Members</p>
                 <h3>All society members</h3>
               </div>
-              <button className="secondary-button" type="button" onClick={() => setSocietySection("addMember")}>Add Member</button>
+              <button className="secondary-button" type="button" onClick={() => { setShowAddMemberForm(!showAddMemberForm); setSocietySection("addMember"); }}>Add Member</button>
             </div>
+            {showAddMemberForm && (
+              <article className="panel form-panel" style={{ marginBottom: "1rem" }}>
+                <h4>Add new member</h4>
+                <form onSubmit={handleSocietyAddMember}>
+                  <FormField label="Full name" value={addMemberForm.full_name} onChange={(value) => setAddMemberForm((prev) => ({ ...prev, full_name: value }))} />
+                  <FormField label="Email" value={addMemberForm.email} onChange={(value) => setAddMemberForm((prev) => ({ ...prev, email: value }))} />
+                  <FormField label="Phone" value={addMemberForm.phone} onChange={(value) => setAddMemberForm((prev) => ({ ...prev, phone: value }))} />
+                  <FormField label="Password" type="password" value={addMemberForm.password} onChange={(value) => setAddMemberForm((prev) => ({ ...prev, password: value }))} />
+                  <div className="button-group">
+                    <button className="primary-button" type="submit">Add Member</button>
+                    <button className="secondary-button" type="button" onClick={() => setShowAddMemberForm(false)}>Cancel</button>
+                  </div>
+                </form>
+              </article>
+            )}
             {societyUsers.length > 0 ? (
-              <div className="ag-grid-wrapper ag-theme-alpine">
-                <AgGridReact
-                  domLayout="autoHeight"
-                  rowData={societyUsers}
-                  columnDefs={[
-                    { field: "full_name", headerName: "Name", flex: 1 },
-                    { field: "email", headerName: "Email", flex: 1 },
-                    { field: "phone", headerName: "Phone", flex: 1 },
-                    { field: "role", headerName: "Role", flex: 0.8 },
-                    { 
-                      field: "is_active", 
-                      headerName: "Status", 
-                      valueFormatter: (params) => (params.value ? "Active" : "Inactive"), 
-                      flex: 0.8 
-                    },
-                  ]}
-                  defaultColDef={{ sortable: true, filter: true, resizable: true, minWidth: 100 }}
-                  style={{ width: "100%", minHeight: "320px" }}
-                />
+              <div>
+                <div className="ag-grid-wrapper ag-theme-alpine">
+                  <AgGridReact
+                    domLayout="autoHeight"
+                    rowData={societyUsers}
+                    columnDefs={[
+                      { field: "full_name", headerName: "Name", flex: 1 },
+                      { field: "email", headerName: "Email", flex: 1 },
+                      { field: "phone", headerName: "Phone", flex: 1 },
+                      { field: "role", headerName: "Role", flex: 0.8 },
+                      { 
+                        field: "is_active", 
+                        headerName: "Status", 
+                        valueFormatter: (params) => (params.value ? "Active" : "Inactive"), 
+                        flex: 0.8 
+                      },
+                    ]}
+                    defaultColDef={{ sortable: true, filter: true, resizable: true, minWidth: 100 }}
+                    style={{ width: "100%", minHeight: "320px" }}
+                  />
+                </div>
+                <div className="section-heading-row light" style={{ marginTop: "1rem" }}>
+                  <h4>Edit members</h4>
+                </div>
+                <div className="table-card">
+                  <div className="table-row table-header">
+                    <span>Name</span>
+                    <span>Email</span>
+                    <span>Role</span>
+                    <span>Actions</span>
+                  </div>
+                  {societyUsers.map((m) => (
+                    <div key={m.id} className="table-row">
+                      <span>{m.full_name}</span>
+                      <span>{m.email}</span>
+                      <span>{m.role}</span>
+                      <span className="actions-column">
+                        <button className="secondary-button" onClick={() => openEditUserModal(m)}>Edit</button>
+                        <button className="secondary-button" onClick={() => toggleUserActive(m)}>
+                          {m.is_active ? "Disable" : "Enable"}
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <p>No members found. Add your first member.</p>
@@ -2096,7 +2466,7 @@ export default function App() {
                 <p className="eyebrow">Parking</p>
                 <h3>Parking slots</h3>
               </div>
-              <button className="secondary-button" type="button">Add Slot</button>
+              <button className="secondary-button" type="button" onClick={openAddSlotModal}>Add Slot</button>
             </div>
             <p>Parking management feature integrated with operations overview. View available slots and assignments from Operations Health.</p>
             <div className="info-section">
@@ -2165,264 +2535,352 @@ export default function App() {
       case "createBill":
         return (
           <article className="panel form-panel">
-            <div className="section-heading-row light">
-              <div>
-                <p className="eyebrow">Advanced billing</p>
-                <h3>Create manual invoice</h3>
-              </div>
-              <button className="secondary-button" type="button" onClick={() => {
-                const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
-                fetchBillHeads(societyId);
-                fetchUnits();
-                fetchBillTemplates(societyId);
-                fetchInvoiceSummary(societyId);
-                fetchInvoices({ society_id: societyId });
-              }}>
-                Refresh billing data
-              </button>
-            </div>
-            <p>Issue an invoice using MCS Act bill headers, add custom sections, and create a manual sample invoice for any unit.</p>
-            <form onSubmit={handleCreateManualInvoice}>
-              <label className="field-group">
-                <span>Billing month</span>
-                <input type="month" value={billingMonth} onChange={(e) => setBillingMonth(e.target.value)} />
-              </label>
-              <label className="field-group">
-                <span>Unit</span>
-                {units.length > 0 ? (
-                  <select value={manualInvoiceUnitId} onChange={(e) => setManualInvoiceUnitId(e.target.value)}>
-                    <option value="">Select unit</option>
-                    {units.map((unit) => (
-                      <option key={unit.id} value={unit.id}>{unit.building} {unit.unit_number}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input type="number" placeholder="Unit ID" value={manualInvoiceUnitId} onChange={(e) => setManualInvoiceUnitId(e.target.value)} />
+              <div className="billing-tabs">
+                <div className="tab-bar">
+                  <button className={`tab ${billingTab === "create" ? "active" : ""}`} onClick={() => setBillingTab("create")}>Create Bill</button>
+                  <button className={`tab ${billingTab === "templates" ? "active" : ""}`} onClick={() => setBillingTab("templates")}>Templates</button>
+                  <button className={`tab ${billingTab === "import" ? "active" : ""}`} onClick={() => setBillingTab("import")}>Manual Import</button>
+                  <button className={`tab ${billingTab === "header" ? "active" : ""}`} onClick={() => setBillingTab("header")}>Header & Footer</button>
+                  <button className={`tab ${billingTab === "sections" ? "active" : ""}`} onClick={() => setBillingTab("sections")}>Bill Sections</button>
+                </div>
+
+                {billingTab === "create" && (
+                  <div>
+                    <div className="section-heading-row light">
+                      <div>
+                        <p className="eyebrow">Advanced billing</p>
+                        <h3>Create manual invoice</h3>
+                      </div>
+                      <div style={{display: 'flex', gap: 8}}>
+                        <button className="secondary-button" type="button" onClick={() => {
+                        const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+                        fetchBillHeads(societyId);
+                        fetchUnits();
+                        fetchBillTemplates(societyId);
+                        fetchInvoiceSummary(societyId);
+                        fetchInvoices({ society_id: societyId });
+                        }}>
+                          Refresh billing data
+                        </button>
+                        <button className="secondary-button" type="button" onClick={handleExportInvoicesCSV}>Export invoices CSV</button>
+                      </div>
+                    </div>
+                    <p>Issue an invoice using MCS Act bill headers, add custom sections, and create a manual sample invoice for any unit.</p>
+                    <form onSubmit={handleCreateManualInvoice}>
+                      <label className="field-group">
+                        <span>Billing month</span>
+                        <input type="month" value={billingMonth} onChange={(e) => setBillingMonth(e.target.value)} />
+                      </label>
+                      <label className="field-group">
+                        <span>Unit</span>
+                        {units.length > 0 ? (
+                          <select value={manualInvoiceUnitId} onChange={(e) => setManualInvoiceUnitId(e.target.value)}>
+                            <option value="">Select unit</option>
+                            {units.map((unit) => (
+                              <option key={unit.id} value={unit.id}>{unit.building} {unit.unit_number}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input type="number" placeholder="Unit ID" value={manualInvoiceUnitId} onChange={(e) => setManualInvoiceUnitId(e.target.value)} />
+                        )}
+                      </label>
+
+                      <div className="section-heading-row">
+                        <div>
+                          <p className="eyebrow">Bill sections</p>
+                          <h4>Line items</h4>
+                        </div>
+                        <button className="secondary-button" type="button" onClick={handleAddLineItem}>Add section</button>
+                      </div>
+                      {billHeads.length === 0 ? (
+                        <div className="panel card-panel">
+                          <p>No bill headers found for this society. Create a new section or load default MCS Act headers.</p>
+                          <button className="secondary-button" type="button" onClick={handleSetupDefaultHeads}>Setup default bill headers</button>
+                        </div>
+                      ) : (
+                        manualInvoiceLineItems.map((item, index) => (
+                          <div className="field-group line-item-row" key={`line-item-${index}`}>
+                            <label>
+                              <span>Section</span>
+                              <select value={item.head_id} onChange={(e) => handleLineItemChange(index, "head_id", e.target.value)}>
+                                <option value="">Select section</option>
+                                {billHeads.map((head) => (
+                                  <option key={head.id} value={head.id}>{head.name}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>Amount</span>
+                              <input type="number" step="0.01" value={item.amount} onChange={(e) => handleLineItemChange(index, "amount", e.target.value)} />
+                            </label>
+                            <label>
+                              <span>Qty</span>
+                              <input type="number" min="1" value={item.quantity} onChange={(e) => handleLineItemChange(index, "quantity", e.target.value)} />
+                            </label>
+                            <button className="secondary-button" type="button" onClick={() => handleRemoveLineItem(index)}>Remove</button>
+                          </div>
+                        ))
+                      )}
+
+                      <button className="primary-button" type="submit">Create invoice</button>
+                    </form>
+
+                    {createdInvoice && (
+                      <article className="panel card-panel">
+                        <h4>Invoice created</h4>
+                        <div className="metric-row">
+                          <span>Invoice number</span>
+                          <strong>{createdInvoice.invoice_number}</strong>
+                        </div>
+                        <div className="metric-row">
+                          <span>Total amount</span>
+                          <strong>{createdInvoice.total_amount}</strong>
+                        </div>
+                        <div className="metric-row">
+                          <span>Net amount</span>
+                          <strong>{createdInvoice.net_amount}</strong>
+                        </div>
+                        <div className="metric-row">
+                          <span>Status</span>
+                          <strong>{createdInvoice.status}</strong>
+                        </div>
+                        <div className="invoice-items-preview">
+                          <h5>Line items</h5>
+                          {createdInvoice.line_items?.map((item) => (
+                            <div className="ops-list-row" key={item.id}>
+                              <strong>{item.head_name}</strong>
+                              <span>{item.quantity} × {item.amount} = {item.total}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <button className="secondary-button" onClick={() => handlePreviewInvoice(createdInvoice.id)}>Preview / Print</button>
+                        </div>
+                      </article>
+                    )}
+                  </div>
                 )}
-              </label>
 
-              <div className="section-heading-row">
-                <div>
-                  <p className="eyebrow">Bill sections</p>
-                  <h4>Line items</h4>
-                </div>
-                <button className="secondary-button" type="button" onClick={handleAddLineItem}>Add section</button>
-              </div>
-              {billHeads.length === 0 ? (
-                <div className="panel card-panel">
-                  <p>No bill headers found for this society. Create a new section or load default MCS Act headers.</p>
-                  <button className="secondary-button" type="button" onClick={handleSetupDefaultHeads}>Setup default bill headers</button>
-                </div>
-              ) : (
-                manualInvoiceLineItems.map((item, index) => (
-                  <div className="field-group line-item-row" key={`line-item-${index}`}>
-                    <label>
-                      <span>Section</span>
-                      <select value={item.head_id} onChange={(e) => handleLineItemChange(index, "head_id", e.target.value)}>
-                        <option value="">Select section</option>
-                        {billHeads.map((head) => (
-                          <option key={head.id} value={head.id}>{head.name}</option>
+                {billingTab === "templates" && (
+                  <div>
+                    <article className="panel card-panel form-panel">
+                      <div className="section-heading-row light">
+                        <div>
+                          <p className="eyebrow">Templates</p>
+                          <h4>Billing template builder</h4>
+                        </div>
+                      </div>
+                      <p>Create reusable invoice templates from configured bill heads or load an existing template into the manual invoice.</p>
+                      <label className="field-group">
+                        <span>Select template</span>
+                        <select value={selectedTemplateId || ""} onChange={(e) => setSelectedTemplateId(e.target.value)}>
+                          <option value="">Select existing template</option>
+                          {billTemplates.map((template) => (
+                            <option key={template.id} value={template.id}>{template.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="button-group">
+                        <button className="secondary-button" type="button" onClick={() => {
+                          const template = billTemplates.find((tpl) => tpl.id === Number(selectedTemplateId));
+                          handleLoadTemplateToInvoice(template);
+                        }} disabled={!selectedTemplateId}>Load template into invoice</button>
+                        <button className="secondary-button" type="button" onClick={() => handleDeleteTemplate(selectedTemplateId)} disabled={!selectedTemplateId}>Delete template</button>
+                      </div>
+                      <form onSubmit={handleCreateTemplate}>
+                        <FormField label="Template name" value={templateName} onChange={(value) => setTemplateName(value)} />
+                        {templateLineItems.map((item, index) => (
+                          <div className="field-group line-item-row" key={`template-line-item-${index}`}>
+                            <label>
+                              <span>Section</span>
+                              <select value={item.head_id} onChange={(e) => handleTemplateLineItemChange(index, "head_id", e.target.value)}>
+                                <option value="">Select section</option>
+                                {billHeads.map((head) => (
+                                  <option key={head.id} value={head.id}>{head.name}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>Amount</span>
+                              <input type="number" step="0.01" value={item.amount} onChange={(e) => handleTemplateLineItemChange(index, "amount", e.target.value)} />
+                            </label>
+                            <label>
+                              <span>% Value</span>
+                              <input type="number" step="0.01" value={item.percentage_value} onChange={(e) => handleTemplateLineItemChange(index, "percentage_value", e.target.value)} />
+                            </label>
+                            <label className="field-group compact-field">
+                              <span>Use %</span>
+                              <input type="checkbox" checked={item.is_percentage} onChange={(e) => handleTemplateLineItemChange(index, "is_percentage", e.target.checked)} />
+                            </label>
+                            <button className="secondary-button" type="button" onClick={() => handleRemoveTemplateLineItem(index)}>Remove</button>
+                          </div>
                         ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Amount</span>
-                      <input type="number" step="0.01" value={item.amount} onChange={(e) => handleLineItemChange(index, "amount", e.target.value)} />
-                    </label>
-                    <label>
-                      <span>Qty</span>
-                      <input type="number" min="1" value={item.quantity} onChange={(e) => handleLineItemChange(index, "quantity", e.target.value)} />
-                    </label>
-                    <button className="secondary-button" type="button" onClick={() => handleRemoveLineItem(index)}>Remove</button>
+                        <button className="secondary-button" type="button" onClick={handleAddTemplateLineItem}>Add template section</button>
+                        <button className="primary-button" type="submit">Save template</button>
+                      </form>
+                      {billTemplates.length > 0 && (
+                        <div className="template-list">
+                          <h5>Existing templates</h5>
+                          {billTemplates.map((template) => (
+                            <div key={template.id} className="ops-list-row">
+                              <strong>{template.name}</strong>
+                              <span>{template.heads?.length || 0} sections</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+
+                    <article className="panel card-panel form-panel">
+                      <div className="section-heading-row light">
+                        <div>
+                          <p className="eyebrow">Generate invoices</p>
+                          <h4>Bulk generation</h4>
+                        </div>
+                      </div>
+                      <p>Use a saved template to generate invoices for all society units.</p>
+                      <form onSubmit={handleGenerateInvoices}>
+                        <label className="field-group">
+                          <span>Template</span>
+                          <select value={selectedTemplateId || ""} onChange={(e) => setSelectedTemplateId(e.target.value)}>
+                            <option value="">Select template</option>
+                            {billTemplates.map((template) => (
+                              <option key={template.id} value={template.id}>{template.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field-group">
+                          <span>Billing month</span>
+                          <input type="month" value={billingTemplateMonth} onChange={(e) => setBillingTemplateMonth(e.target.value)} />
+                        </label>
+                        <button className="primary-button" type="submit">Generate invoices</button>
+                      </form>
+                    </article>
+
+                    <article className="panel card-panel form-panel">
+                      <div className="section-heading-row light">
+                        <div>
+                          <p className="eyebrow">Invoice search & export</p>
+                          <h4>Filter and export invoices</h4>
+                        </div>
+                      </div>
+                      <div className="field-row">
+                        <label className="field-group">
+                          <span>Status</span>
+                          <select value={invoiceStatusFilter} onChange={(e) => setInvoiceStatusFilter(e.target.value)}>
+                            <option value="">All</option>
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="overdue">Overdue</option>
+                            <option value="partially_paid">Partially Paid</option>
+                          </select>
+                        </label>
+                        <label className="field-group">
+                          <span>Billing month</span>
+                          <input type="month" value={invoiceBillingMonthFilter} onChange={(e) => setInvoiceBillingMonthFilter(e.target.value)} />
+                        </label>
+                      </div>
+                      <div className="button-group" style={{ gap: 12, marginTop: 12 }}>
+                        <button className="secondary-button" type="button" onClick={handleApplyInvoiceFilters}>Apply filters</button>
+                        <button className="secondary-button" type="button" onClick={handleExportInvoicesCSV}>Export CSV</button>
+                        <button className="primary-button" type="button" onClick={handleExportInvoicesXLSX}>Export XLSX</button>
+                      </div>
+                      {generatedInvoices.length > 0 && (
+                        <div className="invoice-list-summary" style={{ marginTop: 16 }}>
+                          <h5>Filtered invoices</h5>
+                          {generatedInvoices.slice(0, 5).map((invoice) => (
+                            <div key={invoice.invoice_id} className="ops-list-row">
+                              <strong>{invoice.invoice_number}</strong>
+                              <span>Unit {invoice.unit_id} • {invoice.status} • ₹{invoice.net_amount}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </article>
                   </div>
-                ))
-              )}
+                )}
 
-              <button className="primary-button" type="submit">Create invoice</button>
-            </form>
-
-            <article className="panel card-panel form-panel">
-              <div className="section-heading-row light">
-                <div>
-                  <p className="eyebrow">Templates</p>
-                  <h4>Billing template builder</h4>
-                </div>
-              </div>
-              <p>Create reusable invoice templates from configured bill heads or load an existing template into the manual invoice.</p>
-              <label className="field-group">
-                <span>Select template</span>
-                <select value={selectedTemplateId || ""} onChange={(e) => setSelectedTemplateId(e.target.value)}>
-                  <option value="">Select existing template</option>
-                  {billTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>{template.name}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="button-group">
-                <button className="secondary-button" type="button" onClick={() => {
-                  const template = billTemplates.find((tpl) => tpl.id === Number(selectedTemplateId));
-                  handleLoadTemplateToInvoice(template);
-                }} disabled={!selectedTemplateId}>Load template into invoice</button>
-                <button className="secondary-button" type="button" onClick={() => handleDeleteTemplate(selectedTemplateId)} disabled={!selectedTemplateId}>Delete template</button>
-              </div>
-              <form onSubmit={handleCreateTemplate}>
-                <FormField label="Template name" value={templateName} onChange={(value) => setTemplateName(value)} />
-                {templateLineItems.map((item, index) => (
-                  <div className="field-group line-item-row" key={`template-line-item-${index}`}>
-                    <label>
-                      <span>Section</span>
-                      <select value={item.head_id} onChange={(e) => handleTemplateLineItemChange(index, "head_id", e.target.value)}>
-                        <option value="">Select section</option>
-                        {billHeads.map((head) => (
-                          <option key={head.id} value={head.id}>{head.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Amount</span>
-                      <input type="number" step="0.01" value={item.amount} onChange={(e) => handleTemplateLineItemChange(index, "amount", e.target.value)} />
-                    </label>
-                    <label>
-                      <span>% Value</span>
-                      <input type="number" step="0.01" value={item.percentage_value} onChange={(e) => handleTemplateLineItemChange(index, "percentage_value", e.target.value)} />
-                    </label>
-                    <label className="field-group compact-field">
-                      <span>Use %</span>
-                      <input type="checkbox" checked={item.is_percentage} onChange={(e) => handleTemplateLineItemChange(index, "is_percentage", e.target.checked)} />
-                    </label>
-                    <button className="secondary-button" type="button" onClick={() => handleRemoveTemplateLineItem(index)}>Remove</button>
+                {billingTab === "import" && (
+                  <div>
+                    <article className="panel card-panel">
+                      <h4>Manual invoice import</h4>
+                      <p>Upload a CSV of invoices to import into the billing system.</p>
+                      <div className="field-group">
+                        <input type="file" accept=".csv" onChange={(e) => setImportFile(e.target.files[0] || null)} />
+                      </div>
+                      <div className="button-group">
+                        <button className="primary-button" onClick={async () => {
+                          if (!importFile) { setMessage("Select a CSV file first."); return; }
+                          const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+                          const form = new FormData();
+                          form.append('file', importFile);
+                          form.append('society_id', societyId);
+                          try {
+                            await axios.post(`${API_BASE}/billing-advanced/invoices/import`, form, { headers: { Authorization: `Bearer ${token}` } });
+                            setMessage('Import started.');
+                            fetchInvoices({ society_id: societyId });
+                          } catch (err) {
+                            setMessage(err.response?.data?.detail || 'Import failed or API not available.');
+                          }
+                        }}>Start import</button>
+                      </div>
+                    </article>
                   </div>
-                ))}
-                <button className="secondary-button" type="button" onClick={handleAddTemplateLineItem}>Add template section</button>
-                <button className="primary-button" type="submit">Save template</button>
-              </form>
-              {billTemplates.length > 0 && (
-                <div className="template-list">
-                  <h5>Existing templates</h5>
-                  {billTemplates.map((template) => (
-                    <div key={template.id} className="ops-list-row">
-                      <strong>{template.name}</strong>
-                      <span>{template.heads?.length || 0} sections</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </article>
+                )}
 
-            <article className="panel card-panel form-panel">
-              <div className="section-heading-row light">
-                <div>
-                  <p className="eyebrow">Generate invoices</p>
-                  <h4>Bulk generation</h4>
-                </div>
+                {billingTab === "header" && (
+                  <div>
+                    <article className="panel card-panel form-panel">
+                      <h4>Design bill header & footer</h4>
+                      <p>Customize the printed/PDF header and footer for invoices.</p>
+                      <label className="field-group">
+                        <span>Header HTML</span>
+                        <textarea value={headerHtml} onChange={(e) => setHeaderHtml(e.target.value)} rows={6} />
+                      </label>
+                      <label className="field-group">
+                        <span>Footer HTML</span>
+                        <textarea value={footerHtml} onChange={(e) => setFooterHtml(e.target.value)} rows={4} />
+                      </label>
+                      <div className="button-group">
+                        <button className="primary-button" onClick={async () => {
+                          const societyId = user?.role === "admin" ? selectedSocietyId : user?.society_id;
+                          try {
+                            await axios.post(`${API_BASE}/billing-advanced/header-footer`, { society_id: societyId, header_html: headerHtml, footer_html: footerHtml }, { headers: { Authorization: `Bearer ${token}` } });
+                            setMessage('Header/footer saved.');
+                          } catch (err) {
+                            setMessage(err.response?.data?.detail || 'Could not save header/footer (API may be missing).');
+                          }
+                        }}>Save</button>
+                      </div>
+                    </article>
+                  </div>
+                )}
+
+                {billingTab === "sections" && (
+                  <div>
+                    <article className="panel card-panel form-panel">
+                      <h3>Add new billing section</h3>
+                      <form onSubmit={handleCreateBillHead}>
+                        <FormField label="Section name" value={newBillHead.name} onChange={(value) => setNewBillHead((prev) => ({ ...prev, name: value }))} />
+                        <FormField label="Short code" value={newBillHead.short_code} onChange={(value) => setNewBillHead((prev) => ({ ...prev, short_code: value }))} />
+                        <label className="field-group">
+                          <span>Description</span>
+                          <textarea value={newBillHead.description} onChange={(e) => setNewBillHead((prev) => ({ ...prev, description: e.target.value }))} />
+                        </label>
+                        <label className="field-group compact-field">
+                          <span>Mandatory</span>
+                          <input type="checkbox" checked={newBillHead.is_mandatory} onChange={(e) => setNewBillHead((prev) => ({ ...prev, is_mandatory: e.target.checked }))} />
+                        </label>
+                        <label className="field-group">
+                          <span>Display order</span>
+                          <input type="number" value={newBillHead.display_order} onChange={(e) => setNewBillHead((prev) => ({ ...prev, display_order: e.target.value }))} />
+                        </label>
+                        <button className="primary-button" type="submit">Create section</button>
+                      </form>
+                    </article>
+                  </div>
+                )}
               </div>
-              <p>Use a saved template to generate invoices for all society units.</p>
-              <form onSubmit={handleGenerateInvoices}>
-                <label className="field-group">
-                  <span>Template</span>
-                  <select value={selectedTemplateId || ""} onChange={(e) => setSelectedTemplateId(e.target.value)}>
-                    <option value="">Select template</option>
-                    {billTemplates.map((template) => (
-                      <option key={template.id} value={template.id}>{template.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field-group">
-                  <span>Billing month</span>
-                  <input type="month" value={billingTemplateMonth} onChange={(e) => setBillingTemplateMonth(e.target.value)} />
-                </label>
-                <button className="primary-button" type="submit">Generate invoices</button>
-              </form>
-              {generatedInvoices.length > 0 && (
-                <div className="invoice-list-summary">
-                  <h5>Generated invoices</h5>
-                  {generatedInvoices.slice(0, 5).map((invoice) => (
-                    <div key={invoice.invoice_id} className="ops-list-row">
-                      <strong>{invoice.invoice_number}</strong>
-                      <span>Unit {invoice.unit_id} • {invoice.status} • ₹{invoice.net_amount}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </article>
-
-            {invoiceSummary && (
-              <article className="panel card-panel">
-                <h4>Invoice summary</h4>
-                <div className="metric-row">
-                  <span>Total invoices</span>
-                  <strong>{invoiceSummary.total_invoices}</strong>
-                </div>
-                <div className="metric-row">
-                  <span>Pending</span>
-                  <strong>{invoiceSummary.pending}</strong>
-                </div>
-                <div className="metric-row">
-                  <span>Paid</span>
-                  <strong>{invoiceSummary.paid}</strong>
-                </div>
-                <div className="metric-row">
-                  <span>Overdue</span>
-                  <strong>{invoiceSummary.overdue}</strong>
-                </div>
-                <div className="metric-row">
-                  <span>Outstanding</span>
-                  <strong>₹{invoiceSummary.outstanding}</strong>
-                </div>
-              </article>
-            )}
-
-            {createdInvoice && (
-              <article className="panel card-panel">
-                <h4>Invoice created</h4>
-                <div className="metric-row">
-                  <span>Invoice number</span>
-                  <strong>{createdInvoice.invoice_number}</strong>
-                </div>
-                <div className="metric-row">
-                  <span>Total amount</span>
-                  <strong>{createdInvoice.total_amount}</strong>
-                </div>
-                <div className="metric-row">
-                  <span>Net amount</span>
-                  <strong>{createdInvoice.net_amount}</strong>
-                </div>
-                <div className="metric-row">
-                  <span>Status</span>
-                  <strong>{createdInvoice.status}</strong>
-                </div>
-                <div className="invoice-items-preview">
-                  <h5>Line items</h5>
-                  {createdInvoice.line_items?.map((item) => (
-                    <div className="ops-list-row" key={item.id}>
-                      <strong>{item.head_name}</strong>
-                      <span>{item.quantity} × {item.amount} = {item.total}</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            )}
-
-            <article className="panel card-panel form-panel">
-              <h3>Add new billing section</h3>
-              <form onSubmit={handleCreateBillHead}>
-                <FormField label="Section name" value={newBillHead.name} onChange={(value) => setNewBillHead((prev) => ({ ...prev, name: value }))} />
-                <FormField label="Short code" value={newBillHead.short_code} onChange={(value) => setNewBillHead((prev) => ({ ...prev, short_code: value }))} />
-                <label className="field-group">
-                  <span>Description</span>
-                  <textarea value={newBillHead.description} onChange={(e) => setNewBillHead((prev) => ({ ...prev, description: e.target.value }))} />
-                </label>
-                <label className="field-group compact-field">
-                  <span>Mandatory</span>
-                  <input type="checkbox" checked={newBillHead.is_mandatory} onChange={(e) => setNewBillHead((prev) => ({ ...prev, is_mandatory: e.target.checked }))} />
-                </label>
-                <label className="field-group">
-                  <span>Display order</span>
-                  <input type="number" value={newBillHead.display_order} onChange={(e) => setNewBillHead((prev) => ({ ...prev, display_order: e.target.value }))} />
-                </label>
-                <button className="primary-button" type="submit">Create section</button>
-              </form>
-            </article>
           </article>
         );
       case "billPayments":
@@ -2430,9 +2888,29 @@ export default function App() {
           <article className="panel card-panel">
             <h3>Bill payments</h3>
             <p>Track payment status and collection progress for all maintenance bills.</p>
-            <div className="payments-info">
-              <p className="note-text">Payment tracking is integrated with the payment gateway module. View payment details from billing reports.</p>
-            </div>
+              <div className="payments-info">
+                <p className="note-text">Payment tracking is integrated with the payment gateway module. View payment details from billing reports.</p>
+                <div style={{marginTop:12}}>
+                  <button className="secondary-button" onClick={() => fetchPayments()}>Refresh payments</button>
+                </div>
+                <table className="data-table" style={{marginTop:12}}>
+                  <thead>
+                    <tr><th>ID</th><th>Invoice ID</th><th>Amount</th><th>Method</th><th>Provider</th><th>Reference</th></tr>
+                  </thead>
+                  <tbody>
+                    {paymentsList.map(p => (
+                      <tr key={p.id}>
+                        <td>{p.id}</td>
+                        <td>{p.invoice_id}</td>
+                        <td>{p.amount}</td>
+                        <td>{p.method}</td>
+                        <td>{p.provider}</td>
+                        <td>{p.reference_id}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
           </article>
         );
       case "billingReports":
@@ -2778,6 +3256,14 @@ export default function App() {
               </button>
             )}
           </nav>
+          <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            aria-label="Toggle theme"
+          >
+            {theme === "light" ? "🌙" : "☀️"}
+          </button>
           {user && (
             <div className="user-profile">
               <span className="user-badge">{user.full_name?.charAt(0)}</span>
@@ -3076,6 +3562,93 @@ export default function App() {
           </section>
         )}
       </main>
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="modal-overlay" onClick={closeEditUserModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit User: {editUserForm.full_name}</h3>
+              <button className="modal-close" onClick={closeEditUserModal}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <FormField label="Full name" value={editUserForm.full_name} onChange={(value) => setEditUserForm((prev) => ({ ...prev, full_name: value }))} />
+              <FormField label="Email" value={editUserForm.email} onChange={(value) => setEditUserForm((prev) => ({ ...prev, email: value }))} />
+              <FormField label="Phone" value={editUserForm.phone} onChange={(value) => setEditUserForm((prev) => ({ ...prev, phone: value }))} />
+              <label className="field-group">
+                <span>Role</span>
+                <select value={editUserForm.role} onChange={(e) => setEditUserForm((prev) => ({ ...prev, role: e.target.value }))}>
+                  <option value="">Select role</option>
+                  <option value="admin">Developer Admin</option>
+                  <option value="society_admin">Society Admin</option>
+                  <option value="manager">Manager</option>
+                  <option value="resident">Resident</option>
+                  <option value="gatekeeper">Gatekeeper</option>
+                  <option value="vendor">Vendor</option>
+                </select>
+              </label>
+              {user?.role === "admin" && (
+                <label className="field-group">
+                  <span>Society ID</span>
+                  <select value={editUserForm.society_id} onChange={(e) => setEditUserForm((prev) => ({ ...prev, society_id: e.target.value }))}>
+                    <option value="">No society</option>
+                    {adminSocieties.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label className="field-group compact-field">
+                <span>Active</span>
+                <input type="checkbox" checked={editUserForm.is_active} onChange={(e) => setEditUserForm((prev) => ({ ...prev, is_active: e.target.checked }))} />
+              </label>
+              <FormField label="New password (leave blank to keep current)" type="password" value={editUserForm.password} onChange={(value) => setEditUserForm((prev) => ({ ...prev, password: value }))} />
+            </div>
+            <div className="modal-footer">
+              <button className="primary-button" onClick={handleSaveUser}>Save changes</button>
+              <button className="secondary-button" onClick={closeEditUserModal}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Slot Modal */}
+      {showAddSlotModal && (
+        <div className="modal-overlay" onClick={closeAddSlotModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Add Parking Slot</h3>
+              <button className="modal-close" onClick={closeAddSlotModal}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <label className="field-group">
+                <span>Unit</span>
+                <select value={slotForm.unit_id} onChange={(e) => setSlotForm((prev) => ({ ...prev, unit_id: e.target.value }))}>
+                  <option value="">Select unit</option>
+                  {units.map((unit) => (
+                    <option key={unit.id} value={unit.id}>{unit.building} {unit.unit_number} (Car: {unit.parking_car_slots || 0} | Bike: {unit.parking_bike_slots || 0})</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-group">
+                <span>Slot type</span>
+                <select value={slotForm.slot_type} onChange={(e) => setSlotForm((prev) => ({ ...prev, slot_type: e.target.value }))}>
+                  <option value="car">Car</option>
+                  <option value="bike">Bike</option>
+                </select>
+              </label>
+              <label className="field-group">
+                <span>Count</span>
+                <input type="number" min="1" value={slotForm.count} onChange={(e) => setSlotForm((prev) => ({ ...prev, count: e.target.value }))} />
+              </label>
+            </div>
+            <div className="modal-footer">
+              <button className="primary-button" onClick={handleAddSlot}>Add slot(s)</button>
+              <button className="secondary-button" onClick={closeAddSlotModal}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.enums import Role
 from app.core.security import hash_password
 from app.models.entities import Society, User
-from app.schemas.dto import UserCreate, UserRead, UserAccessUpdate
+from app.schemas.dto import UserCreate, UserRead, UserAccessUpdate, UserUpdate
 from app.services.notifications import send_society_admin_credentials
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -162,6 +162,32 @@ def promote_to_society_admin(user_id: int, current_user: User = Depends(get_curr
     db.refresh(user)
 
     send_society_admin_credentials(user.email, user.phone, user.email or user.phone, new_password)
+    return user
+
+
+@router.patch("/{user_id}", response_model=UserRead)
+def update_user(user_id: int, payload: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update user profile details. Admin can update any user; society_admin can update users in their own society."""
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if current_user.role != Role.ADMIN and not (
+        current_user.role == Role.SOCIETY_ADMIN and current_user.society_id == user.society_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this user")
+
+    updates = payload.model_dump(exclude_none=True)
+    password = updates.pop("password", None)
+    if password:
+        updates["password_hash"] = hash_password(password)
+
+    for field, value in updates.items():
+        setattr(user, field, value)
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
     return user
 
 

@@ -1,8 +1,16 @@
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, extract
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
+from fastapi import UploadFile, File, Form
+from fastapi.responses import StreamingResponse
+import csv
+from io import TextIOWrapper
+import io
+import json
+from openpyxl import Workbook
+from sqlalchemy import func, extract, desc
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -499,3 +507,413 @@ def invoice_summary(
         "total_collected": float(total_collected),
         "outstanding": float(total_amount - total_collected),
     }
+
+
+
+@router.get("/invoices/stats/dashboard")
+def invoice_dashboard(
+    society_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    billing_month: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    scoped_society_id = _society_scope(current_user, society_id)
+    query = db.query(AdvancedInvoice)
+    if scoped_society_id is not None:
+        query = query.filter(AdvancedInvoice.society_id == scoped_society_id)
+    if status:
+        query = query.filter(AdvancedInvoice.status == status)
+    if billing_month:
+        query = query.filter(AdvancedInvoice.billing_month == billing_month)
+
+    invoices = query.order_by(AdvancedInvoice.due_date.asc()).all()
+    monthly = defaultdict(lambda: {"billing_month": None, "count": 0, "total_billed": 0.0, "total_collected": 0.0, "outstanding": 0.0, "pending": 0, "paid": 0, "overdue": 0, "partially_paid": 0})
+    summary = {
+        "total_invoices": 0,
+        "pending": 0,
+        "paid": 0,
+        "overdue": 0,
+        "partially_paid": 0,
+        "total_billed": 0.0,
+        "total_collected": 0.0,
+        "outstanding": 0.0,
+    }
+    overdue_items = []
+
+    for inv in invoices:
+        summary["total_invoices"] += 1
+        summary["total_billed"] += inv.net_amount
+        summary["total_collected"] += inv.total_paid
+        summary["outstanding"] += max(0.0, inv.net_amount - inv.total_paid)
+        if inv.status in summary:
+            summary[inv.status] += 1
+
+        month_data = monthly[inv.billing_month]
+        month_data["billing_month"] = inv.billing_month
+        month_data["count"] += 1
+        month_data["total_billed"] += inv.net_amount
+        month_data["total_collected"] += inv.total_paid
+        month_data["outstanding"] += max(0.0, inv.net_amount - inv.total_paid)
+        if inv.status in month_data:
+            month_data[inv.status] += 1
+        monthly[inv.billing_month] = month_data
+
+        if inv.status == "overdue":
+            overdue_items.append({
+                "invoice_id": inv.id,
+                "invoice_number": inv.invoice_number,
+                "unit_id": inv.unit_id,
+                "billing_month": inv.billing_month,
+                "net_amount": inv.net_amount,
+                "total_paid": inv.total_paid,
+                "outstanding": float(max(0.0, inv.net_amount - inv.total_paid)),
+                "due_date": inv.due_date.isoformat() if inv.due_date else None,
+            })
+
+    overdue_items.sort(key=lambda item: item["outstanding"], reverse=True)
+
+    return {
+        "summary": {k: float(v) if isinstance(v, float) else v for k, v in summary.items()},
+        "monthly_breakdown": list(monthly.values()),
+        "overdue_alerts": overdue_items[:5],
+    }
+
+
+@router.post("/invoices/import")
+def import_invoices(file: UploadFile = File(...), society_id: int = Form(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    society_id = _required_society(current_user, society_id)
+    # Accept CSV with headers: unit_id,billing_month,net_amount
+    # Each row may include a "line_items" column containing JSON list of {"head_id":int,"amount":float,"quantity":int}
+    # Or an "items" column with semicolon-separated entries like "head_id:amount:quantity;head_id:amount"
+    try:
+        stream = TextIOWrapper(file.file, encoding="utf-8")
+        reader = csv.DictReader(stream)
+        created = 0
+        for row in reader:
+            unit_id = int(row.get("unit_id") or 0)
+            billing_month = row.get("billing_month")
+            raw_net = row.get("net_amount") or row.get("amount")
+            net_amount = float(raw_net) if raw_net else None
+            # parse line items
+            line_items = []
+            if row.get("line_items"):
+                import json
+                try:
+                    parsed = json.loads(row.get("line_items"))
+                    for li in parsed:
+                        head_id = int(li.get("head_id"))
+                        amount = float(li.get("amount") or 0)
+                        quantity = int(li.get("quantity") or 1)
+                        line_items.append({"head_id": head_id, "amount": amount, "quantity": quantity})
+                except Exception:
+                    pass
+            elif row.get("items"):
+                # items format: head:amount:qty;head:amount
+                parts = row.get("items").split(";")
+                for p in parts:
+                    if not p.strip():
+                        continue
+                    pieces = p.split(":")
+                    try:
+                        h = int(pieces[0])
+                        a = float(pieces[1]) if len(pieces) > 1 and pieces[1] else 0
+                        q = int(pieces[2]) if len(pieces) > 2 and pieces[2] else 1
+                        line_items.append({"head_id": h, "amount": a, "quantity": q})
+                    except Exception:
+                        continue
+
+            if not unit_id or not billing_month:
+                continue
+
+            # If no line items provided, fall back to net_amount
+            if not line_items and (net_amount is None or net_amount <= 0):
+                continue
+
+            inv_no = _get_or_create_sequence(society_id, db)
+            total_amount = sum(li["amount"] * (li.get("quantity", 1) or 1) for li in line_items) if line_items else (net_amount or 0)
+
+            invoice = AdvancedInvoice(
+                society_id=society_id,
+                unit_id=unit_id,
+                invoice_number=inv_no,
+                billing_month=billing_month,
+                total_amount=total_amount,
+                net_amount=total_amount,
+                status="pending",
+                generated_by_user_id=current_user.id,
+            )
+            db.add(invoice)
+            db.flush()
+
+            # create line item records
+            for li in line_items:
+                head = db.get(BillHead, li["head_id"])
+                head_name = head.name if head else f"Head {li['head_id']}"
+                item = InvoiceLineItem(
+                    invoice_id=invoice.id,
+                    head_id=li["head_id"],
+                    head_name=head_name,
+                    amount=li["amount"],
+                    quantity=li.get("quantity", 1) or 1,
+                    total=li["amount"] * (li.get("quantity", 1) or 1),
+                )
+                db.add(item)
+            created += 1
+        db.commit()
+        return {"imported": created}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to import CSV: {exc}") from exc
+
+
+@router.post("/header-footer")
+def save_header_footer(society_id: int, header_html: str | None = None, footer_html: str | None = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    society_id = _required_society(current_user, society_id)
+    # Store in settings table
+    from app.models.entities import Setting
+
+    if header_html is not None:
+        key = f"billing_header_{society_id}"
+        s = db.query(Setting).filter(Setting.key == key).first()
+        if not s:
+            s = Setting(key=key, value=header_html)
+            db.add(s)
+        else:
+            s.value = header_html
+
+    if footer_html is not None:
+        keyf = f"billing_footer_{society_id}"
+        sf = db.query(Setting).filter(Setting.key == keyf).first()
+        if not sf:
+            sf = Setting(key=keyf, value=footer_html)
+            db.add(sf)
+        else:
+            sf.value = footer_html
+
+    db.commit()
+    return {"status": "saved"}
+
+
+@router.get("/header-footer")
+def get_header_footer(society_id: int | None = Query(default=None), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    society_id = _required_society(current_user, society_id)
+    from app.models.entities import Setting
+    header = db.query(Setting).filter(Setting.key == f"billing_header_{society_id}").first()
+    footer = db.query(Setting).filter(Setting.key == f"billing_footer_{society_id}").first()
+    return {"header_html": header.value if header else None, "footer_html": footer.value if footer else None}
+
+
+@router.get("/invoices/{invoice_id}/export")
+def export_invoice_html(invoice_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+        invoice = db.get(AdvancedInvoice, invoice_id)
+        if not invoice:
+                raise HTTPException(status_code=404, detail="Invoice not found")
+
+        # Authorization: admin or society admin for same society
+        if current_user.role != Role.ADMIN and not (current_user.role == Role.SOCIETY_ADMIN and current_user.society_id == invoice.society_id):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to export this invoice")
+
+        inv_data = _get_invoice_with_items(invoice, db)
+
+        # load header/footer
+        from app.models.entities import Setting
+        header = db.query(Setting).filter(Setting.key == f"billing_header_{invoice.society_id}").first()
+        footer = db.query(Setting).filter(Setting.key == f"billing_footer_{invoice.society_id}").first()
+        header_html = header.value if header else ""
+        footer_html = footer.value if footer else ""
+
+        # build simple invoice HTML
+        items_html = ""
+        for it in inv_data.get("line_items", []):
+                items_html += f"<tr><td>{it['head_name']}</td><td>{it['quantity']}</td><td>{it['amount']:.2f}</td><td>{it['total']:.2f}</td></tr>"
+
+        body = f"""
+        <!doctype html>
+        <html>
+            <head>
+                <meta charset='utf-8'/>
+                <title>Invoice {inv_data.get('invoice_number')}</title>
+                <style>body{{font-family: Arial, Helvetica, sans-serif; padding:20px}} table{{width:100%;border-collapse:collapse}} td,th{{border:1px solid #ddd;padding:8px}}</style>
+            </head>
+            <body>
+                <div class='header'>{header_html}</div>
+                <h2>Invoice {inv_data.get('invoice_number')}</h2>
+                <div><strong>Unit:</strong> {inv_data.get('building')} {inv_data.get('unit_number')} — <strong>Resident:</strong> {inv_data.get('resident_name') or ''}</div>
+                <div><strong>Billing month:</strong> {inv_data.get('billing_month')}</div>
+                <table>
+                    <thead><tr><th>Head</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead>
+                    <tbody>
+                        {items_html}
+                    </tbody>
+                </table>
+                <div style='margin-top:12px'><strong>Net amount:</strong> {inv_data.get('net_amount')}</div>
+                <div class='footer' style='margin-top:30px'>{footer_html}</div>
+            </body>
+        </html>
+        """
+        return Response(content=body, media_type="text/html")
+
+
+@router.get("/invoices/export")
+def export_invoices_csv(
+    society_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    billing_month: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export invoices as CSV for selected filters (admin/society scope enforced)"""
+    scoped_society_id = _society_scope(current_user, society_id)
+    query = db.query(AdvancedInvoice)
+    if scoped_society_id is not None:
+        query = query.filter(AdvancedInvoice.society_id == scoped_society_id)
+    if status:
+        query = query.filter(AdvancedInvoice.status == status)
+    if billing_month:
+        query = query.filter(AdvancedInvoice.billing_month == billing_month)
+
+    invoices = query.order_by(AdvancedInvoice.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    # header
+    writer.writerow([
+        "id",
+        "invoice_number",
+        "society_id",
+        "unit_id",
+        "building",
+        "unit_number",
+        "resident_name",
+        "billing_month",
+        "previous_balance",
+        "total_amount",
+        "discount",
+        "late_fee",
+        "net_amount",
+        "total_paid",
+        "status",
+        "due_date",
+        "notes",
+        "created_at",
+        "line_items",
+    ])
+
+    for inv in invoices:
+        inv_data = _get_invoice_with_items(inv, db)
+        line_items_json = json.dumps(inv_data.get("line_items", []), ensure_ascii=False)
+        writer.writerow([
+            inv_data.get("id"),
+            inv_data.get("invoice_number"),
+            inv_data.get("society_id"),
+            inv_data.get("unit_id"),
+            inv_data.get("building"),
+            inv_data.get("unit_number"),
+            inv_data.get("resident_name"),
+            inv_data.get("billing_month"),
+            inv_data.get("previous_balance"),
+            inv_data.get("total_amount"),
+            inv_data.get("discount"),
+            inv_data.get("late_fee"),
+            inv_data.get("net_amount"),
+            inv_data.get("total_paid"),
+            inv_data.get("status"),
+            inv_data.get("due_date"),
+            (inv_data.get("notes") or ""),
+            inv_data.get("created_at"),
+            line_items_json,
+        ])
+
+    content = output.getvalue()
+    output.close()
+    headers = {"Content-Disposition": "attachment; filename=invoices.csv"}
+    return Response(content=content, media_type="text/csv", headers=headers)
+
+
+@router.get("/invoices/export.xlsx")
+def export_invoices_xlsx(
+    society_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    billing_month: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export invoices as XLSX workbook with optional status and billing month filters."""
+    scoped_society_id = _society_scope(current_user, society_id)
+    query = db.query(AdvancedInvoice)
+    if scoped_society_id is not None:
+        query = query.filter(AdvancedInvoice.society_id == scoped_society_id)
+    if status:
+        query = query.filter(AdvancedInvoice.status == status)
+    if billing_month:
+        query = query.filter(AdvancedInvoice.billing_month == billing_month)
+
+    invoices = query.order_by(AdvancedInvoice.created_at.desc()).all()
+
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet(title="Invoices")
+    headers = [
+        "id",
+        "invoice_number",
+        "society_id",
+        "unit_id",
+        "building",
+        "unit_number",
+        "resident_name",
+        "billing_month",
+        "previous_balance",
+        "total_amount",
+        "discount",
+        "late_fee",
+        "net_amount",
+        "total_paid",
+        "status",
+        "due_date",
+        "notes",
+        "created_at",
+        "line_items",
+    ]
+    sheet.append(headers)
+
+    for inv in invoices:
+        inv_data = _get_invoice_with_items(inv, db)
+        line_items_json = json.dumps(inv_data.get("line_items", []), ensure_ascii=False)
+        sheet.append([
+            inv_data.get("id"),
+            inv_data.get("invoice_number"),
+            inv_data.get("society_id"),
+            inv_data.get("unit_id"),
+            inv_data.get("building"),
+            inv_data.get("unit_number"),
+            inv_data.get("resident_name"),
+            inv_data.get("billing_month"),
+            inv_data.get("previous_balance"),
+            inv_data.get("total_amount"),
+            inv_data.get("discount"),
+            inv_data.get("late_fee"),
+            inv_data.get("net_amount"),
+            inv_data.get("total_paid"),
+            inv_data.get("status"),
+            inv_data.get("due_date"),
+            inv_data.get("notes"),
+            inv_data.get("created_at"),
+            line_items_json,
+        ])
+
+    stream = io.BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+
+    def iter_xlsx():
+        while True:
+            chunk = stream.read(8192)
+            if not chunk:
+                break
+            yield chunk
+
+    headers = {"Content-Disposition": "attachment; filename=invoices.xlsx"}
+    return StreamingResponse(
+        iter_xlsx(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )

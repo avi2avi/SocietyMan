@@ -626,31 +626,367 @@ export function PatrolsListSection({ apiBase, token, user }) {
   );
 }
 
-// === DOMESTIC HELP ===
+// === DOMESTIC HELP (Enhanced with CRUD) ===
 export function DomesticHelpSection({ apiBase, token, user }) {
   const [helpers, setHelpers] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: "", phone: "", help_type: "maid", working_days: "", working_hours: "", id_proof_type: "", id_proof_number: "" });
+
+  const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
-    if (token) {
-      axios.get(`${apiBase}/community/domestic-help`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => setHelpers(r.data))
-        .catch(() => setHelpers([]));
-    }
+    if (token) fetchHelpers();
   }, [token]);
+
+  const fetchHelpers = async () => {
+    try {
+      const res = await axios.get(`${apiBase}/community/domestic-help`, { headers });
+      setHelpers(res.data);
+    } catch (e) { setHelpers([]); }
+  };
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${apiBase}/community/domestic-help`, { ...form, society_id: user.society_id }, { headers });
+      setForm({ name: "", phone: "", help_type: "maid", working_days: "", working_hours: "", id_proof_type: "", id_proof_number: "" });
+      setShowForm(false);
+      fetchHelpers();
+    } catch (err) { alert(err.response?.data?.detail || "Failed to add"); }
+  };
+
+  const handleToggle = async (id) => {
+    try {
+      await axios.patch(`${apiBase}/community/domestic-help/${id}/toggle`, {}, { headers });
+      fetchHelpers();
+    } catch (e) { alert("Failed to toggle"); }
+  };
+
+  const typeColors = { maid: "#3b82f6", cook: "#f59e0b", driver: "#10b981", gardener: "#22c55e", nanny: "#ec4899", other: "#6b7280" };
 
   return (
     <article className="panel card-panel">
-      <h3>Domestic Help</h3>
-      <div className="table-card">
-        {helpers.map((h) => (
-          <div key={h.id} className="table-row">
-            <span><strong>{h.name}</strong></span>
-            <span>{h.help_type}</span>
-            <span>{h.phone || "—"}</span>
-            <span>{h.is_active ? "Active" : "Inactive"}</span>
-          </div>
-        ))}
+      <div className="section-heading-row light">
+        <div>
+          <p className="eyebrow">Domestic Help</p>
+          <h3>Domestic Help Management</h3>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => setShowForm(!showForm)}>
+          {showForm ? "Cancel" : "Add Helper"}
+        </button>
       </div>
+      {showForm && (
+        <form onSubmit={handleAdd} className="inline-form" style={{ marginBottom: "1rem" }}>
+          <input type="text" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <input type="text" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <select value={form.help_type} onChange={(e) => setForm({ ...form, help_type: e.target.value })}>
+            <option value="maid">Maid</option><option value="cook">Cook</option><option value="driver">Driver</option>
+            <option value="gardener">Gardener</option><option value="nanny">Nanny</option><option value="other">Other</option>
+          </select>
+          <input type="text" placeholder="Working days (Mon,Tue,...)" value={form.working_days} onChange={(e) => setForm({ ...form, working_days: e.target.value })} />
+          <input type="text" placeholder="Hours (e.g. 9:00-11:00)" value={form.working_hours} onChange={(e) => setForm({ ...form, working_hours: e.target.value })} />
+          <button className="primary-button" type="submit">Add Helper</button>
+        </form>
+      )}
+      {helpers.length > 0 ? (
+        <div className="table-card">
+          {helpers.map((h) => (
+            <div key={h.id} className="table-row">
+              <span><strong>{h.name}</strong></span>
+              <span style={{ color: typeColors[h.help_type] || "#6b7280", fontWeight: 600 }}>{h.help_type}</span>
+              <span>{h.phone || "—"}</span>
+              <span>{h.working_hours || "—"}</span>
+              <span className={`status-pill`} style={{ background: h.is_active ? "#dcfce7" : "#fef2f2", color: h.is_active ? "#16a34a" : "#dc2626" }}>
+                {h.is_active ? "Active" : "Inactive"}
+              </span>
+              <button className="secondary-button" onClick={() => handleToggle(h.id)}>
+                {h.is_active ? "Deactivate" : "Activate"}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : <p>No domestic help registered. Add your first helper.</p>}
+    </article>
+  );
+}
+
+// === COMPLAINT MANAGEMENT ===
+export function ComplaintsSection({ apiBase, token, user }) {
+  const [complaints, setComplaints] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ category_id: "", title: "", description: "", priority: "normal" });
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    if (token) {
+      fetchComplaints();
+      fetchCategories();
+    }
+  }, [token]);
+
+  const fetchComplaints = async () => {
+    try {
+      const res = await axios.get(`${apiBase}/community/complaints`, { headers });
+      setComplaints(res.data);
+    } catch (e) { setComplaints([]); }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get(`${apiBase}/community/complaint-categories`, { headers });
+      setCategories(res.data);
+    } catch (e) { setCategories([]); }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${apiBase}/community/complaints`, {
+        ...form,
+        category_id: Number(form.category_id) || null,
+        society_id: user.society_id,
+      }, { headers });
+      setForm({ category_id: "", title: "", description: "", priority: "normal" });
+      setShowForm(false);
+      fetchComplaints();
+    } catch (err) { alert(err.response?.data?.detail || "Failed to submit"); }
+  };
+
+  const handleStatusUpdate = async (id, status) => {
+    try {
+      await axios.patch(`${apiBase}/community/complaints/${id}`, { status }, { headers });
+      fetchComplaints();
+    } catch (e) { alert("Failed to update"); }
+  };
+
+  const statusColors = { open: "#ef4444", in_progress: "#f59e0b", resolved: "#22c55e", closed: "#6b7280" };
+  const priorityColors = { low: "#6b7280", normal: "#3b82f6", high: "#f59e0b", urgent: "#ef4444" };
+
+  return (
+    <article className="panel card-panel">
+      <div className="section-heading-row light">
+        <div>
+          <p className="eyebrow">Helpdesk</p>
+          <h3>Complaint Management</h3>
+          <p>Track and manage society complaints and service requests</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => setShowForm(!showForm)}>
+          {showForm ? "Cancel" : "New Complaint"}
+        </button>
+      </div>
+      {showForm && (
+        <form onSubmit={handleSubmit} className="inline-form" style={{ marginBottom: "1rem" }}>
+          {categories.length > 0 && (
+            <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+              <option value="">Select category</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          <input type="text" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+          <textarea placeholder="Describe your complaint..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
+          <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+            <option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option>
+          </select>
+          <button className="primary-button" type="submit">Submit Complaint</button>
+        </form>
+      )}
+      {complaints.length > 0 ? (
+        <div className="table-card">
+          <div className="table-row table-header">
+            <span>Title</span><span>Category</span><span>Status</span><span>Priority</span><span>Actions</span>
+          </div>
+          {complaints.map((c) => (
+            <div key={c.id} className="table-row">
+              <span><strong>{c.title}</strong><br /><small>{c.description?.substring(0, 60)}</small></span>
+              <span>{c.category_name || "—"}</span>
+              <span className="status-pill" style={{ background: statusColors[c.status] + "20", color: statusColors[c.status], fontWeight: 600 }}>
+                {c.status?.replace(/_/g, " ")}
+              </span>
+              <span style={{ color: priorityColors[c.priority], fontWeight: 600 }}>{c.priority}</span>
+              <span className="actions-column">
+                {c.status !== "resolved" && c.status !== "closed" && (
+                  <>
+                    <button className="secondary-button" onClick={() => handleStatusUpdate(c.id, "in_progress")}>In Progress</button>
+                    <button className="secondary-button" onClick={() => handleStatusUpdate(c.id, "resolved")}>Resolve</button>
+                  </>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : <p>No complaints found.</p>}
+    </article>
+  );
+}
+
+// === VEHICLE ENTRY LOGS ===
+export function VehicleLogsSection({ apiBase, token, user }) {
+  const [logs, setLogs] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ vehicle_number: "", driver_name: "", driver_phone: "", purpose: "" });
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    if (token) fetchLogs();
+  }, [token]);
+
+  const fetchLogs = async () => {
+    try {
+      const res = await axios.get(`${apiBase}/community/vehicle-logs`, { headers });
+      setLogs(res.data);
+    } catch (e) { setLogs([]); }
+  };
+
+  const handleEntry = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${apiBase}/community/vehicle-logs`, { ...form, society_id: user.society_id }, { headers });
+      setForm({ vehicle_number: "", driver_name: "", driver_phone: "", purpose: "" });
+      setShowForm(false);
+      fetchLogs();
+    } catch (err) { alert(err.response?.data?.detail || "Failed"); }
+  };
+
+  const handleExit = async (id) => {
+    try {
+      await axios.post(`${apiBase}/community/vehicle-logs/${id}/exit`, {}, { headers });
+      fetchLogs();
+    } catch (e) { alert("Failed"); }
+  };
+
+  return (
+    <article className="panel card-panel">
+      <div className="section-heading-row light">
+        <div>
+          <p className="eyebrow">Gate</p>
+          <h3>Vehicle Entry Logs</h3>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => setShowForm(!showForm)}>
+          {showForm ? "Cancel" : "Log Entry"}
+        </button>
+      </div>
+      {showForm && (
+        <form onSubmit={handleEntry} className="inline-form" style={{ marginBottom: "1rem" }}>
+          <input type="text" placeholder="Vehicle Number" value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} required />
+          <input type="text" placeholder="Driver Name" value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} required />
+          <input type="text" placeholder="Driver Phone" value={form.driver_phone} onChange={(e) => setForm({ ...form, driver_phone: e.target.value })} />
+          <input type="text" placeholder="Purpose" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
+          <button className="primary-button" type="submit">Log Entry</button>
+        </form>
+      )}
+      {logs.length > 0 ? (
+        <div className="table-card">
+          <div className="table-row table-header">
+            <span>Vehicle</span><span>Driver</span><span>Entry</span><span>Status</span><span>Actions</span>
+          </div>
+          {logs.map((l) => (
+            <div key={l.id} className="table-row">
+              <span><strong>{l.vehicle_number}</strong></span>
+              <span>{l.driver_name}</span>
+              <span>{new Date(l.entry_at).toLocaleString()}</span>
+              <span className={`status-pill`} style={{ background: l.status === "active" ? "#dcfce7" : "#f3f4f6", color: l.status === "active" ? "#16a34a" : "#6b7280" }}>
+                {l.status}
+              </span>
+              <span>
+                {l.status === "active" && <button className="secondary-button" onClick={() => handleExit(l.id)}>Mark Exit</button>}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : <p>No vehicle logs found.</p>}
+    </article>
+  );
+}
+
+// === VISITOR MANAGEMENT ===
+export function VisitorManagementSection({ apiBase, token, user }) {
+  const [visitors, setVisitors] = useState([]);
+  const [residents, setResidents] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ resident_user_id: "", visitor_name: "", visitor_phone: "", visitor_type: "guest", purpose: "" });
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    if (token) {
+      fetchVisitors();
+      fetchResidents();
+    }
+  }, [token]);
+
+  const fetchVisitors = async () => {
+    try {
+      const societyId = user?.society_id;
+      if (!societyId) return;
+      const res = await axios.get(`${apiBase}/users/society/${societyId}/users`, { headers });
+      setVisitors([]);
+      // Visitors via another route would need a GET /visitors endpoint
+      // For now, show visitor entries via the entry log
+    } catch (e) { setVisitors([]); }
+  };
+
+  const fetchResidents = async () => {
+    try {
+      const societyId = user?.society_id;
+      if (!societyId) return;
+      const res = await axios.get(`${apiBase}/users/society/${societyId}/users`, { headers });
+      setResidents(res.data.filter((u) => u.role === "resident" || u.role === "society_admin"));
+    } catch (e) { setResidents([]); }
+  };
+
+  const handleEntry = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${apiBase}/visitors/entry`, {
+        ...form,
+        resident_user_id: Number(form.resident_user_id),
+        visitor_type: form.visitor_type,
+      }, { headers });
+      setForm({ resident_user_id: "", visitor_name: "", visitor_phone: "", visitor_type: "guest", purpose: "" });
+      setShowForm(false);
+      setMessage("Visitor entry logged. Notification sent.");
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to log visitor");
+    }
+  };
+
+  const [message, setMessage] = useState("");
+
+  return (
+    <article className="panel card-panel">
+      <div className="section-heading-row light">
+        <div>
+          <p className="eyebrow">Gate</p>
+          <h3>Visitor Management</h3>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => setShowForm(!showForm)}>
+          {showForm ? "Cancel" : "Log Visitor"}
+        </button>
+      </div>
+      {message && <div className="toast-alert">{message}</div>}
+      {showForm && (
+        <form onSubmit={handleEntry} className="inline-form" style={{ marginBottom: "1rem" }}>
+          <select value={form.visitor_type} onChange={(e) => setForm({ ...form, visitor_type: e.target.value })}>
+            <option value="guest">Guest</option><option value="delivery">Delivery</option>
+          </select>
+          {residents.length > 0 ? (
+            <select value={form.resident_user_id} onChange={(e) => setForm({ ...form, resident_user_id: e.target.value })} required>
+              <option value="">Visiting resident</option>
+              {residents.map((r) => <option key={r.id} value={r.id}>{r.full_name} - {r.phone}</option>)}
+            </select>
+          ) : (
+            <input type="number" placeholder="Resident User ID" value={form.resident_user_id} onChange={(e) => setForm({ ...form, resident_user_id: e.target.value })} required />
+          )}
+          <input type="text" placeholder="Visitor Name" value={form.visitor_name} onChange={(e) => setForm({ ...form, visitor_name: e.target.value })} required />
+          <input type="text" placeholder="Visitor Phone" value={form.visitor_phone} onChange={(e) => setForm({ ...form, visitor_phone: e.target.value })} required />
+          <input type="text" placeholder="Purpose (optional)" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
+          <button className="primary-button" type="submit">Log Entry</button>
+        </form>
+      )}
+      <p className="note-text">Use the visitor entry form to log guest or delivery visits at the gate. Notifications are sent to residents.</p>
     </article>
   );
 }

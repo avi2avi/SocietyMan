@@ -144,6 +144,18 @@ class UserRead(BaseModel):
         from_attributes = True
 
 
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    role: Role | None = None
+    society_id: int | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_phone: str | None = None
+    password: str | None = Field(None, min_length=8)
+    is_active: bool | None = None
+
+
 class UserAccessUpdate(BaseModel):
     access_erp: bool | None = None
     access_gatekeeper: bool | None = None
@@ -572,6 +584,303 @@ class NotificationRead(BaseModel):
     channel: str
     is_read: bool
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+# SOCIETY360 ENHANCEMENT SCHEMAS - Phase 1 Features
+# ============================================================
+
+
+class VisitorApprovalCreate(BaseModel):
+    visitor_log_id: int
+    approval_status: str = "pending"  # pending, approved, rejected
+    vehicle_number: str | None = None
+    vehicle_type: str | None = None
+    parking_slot: str | None = None
+
+
+class VisitorApprovalUpdate(BaseModel):
+    approval_status: str
+    vehicle_number: str | None = None
+    vehicle_type: str | None = None
+    parking_slot: str | None = None
+    rejection_reason: str | None = None
+
+
+class VisitorApprovalRead(BaseModel):
+    id: int
+    visitor_log_id: int
+    resident_user_id: int
+    approval_status: str
+    vehicle_number: str | None = None
+    vehicle_type: str | None = None
+    parking_slot: str | None = None
+    pass_number: str | None = None
+    approved_by_user_id: int | None = None
+    rejection_reason: str | None = None
+    approved_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MaintenanceCategoryCreate(BaseModel):
+    name: str
+    description: str | None = None
+    icon: str | None = None
+    color: str | None = None
+    sort_order: int = 0
+
+
+class MaintenanceCategoryRead(MaintenanceCategoryCreate):
+    id: int
+    society_id: int
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MaintenanceWorkLogCreate(BaseModel):
+    ticket_id: int
+    staff_user_id: int
+    description: str
+    hours_spent: float | None = None
+
+
+class MaintenanceWorkLogRead(MaintenanceWorkLogCreate):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MaintenanceRatingCreate(BaseModel):
+    ticket_id: int
+    rating: float  # 1-5
+    feedback: str | None = None
+
+
+class MaintenanceRatingRead(MaintenanceRatingCreate):
+    id: int
+    rated_by_user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AnnouncementEnhancedCreate(BaseModel):
+    title: str
+    content: str
+    announcement_type: str = "notice"  # notice, meeting, event
+    priority: str = "medium"  # low, medium, high
+    scheduled_for: datetime | None = None
+    expires_at: datetime | None = None
+
+
+class AnnouncementEnhancedRead(BaseModel):
+    id: int
+    society_id: int
+    title: str
+    content: str
+    announcement_type: str
+    priority: str
+    published_by_user_id: int
+    status: str
+    scheduled_for: datetime | None = None
+    published_at: datetime | None = None
+    expires_at: datetime | None = None
+    view_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ForumPostEnhancedCreate(BaseModel):
+    title: str
+    content: str
+    category: str = "general"
+    tags: str = ""  # comma-separated
+
+
+class ForumPostEnhancedRead(BaseModel):
+    id: int
+    society_id: int
+    title: str
+    content: str
+    category: str
+    author_user_id: int
+    tags: str
+    status: str
+    is_moderated: bool
+    reply_count: int
+    view_count: int
+    engagement_score: float
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BillCycleCreate(BaseModel):
+    cycle_month: str  # YYYY-MM
+
+
+class BillCycleRead(BillCycleCreate):
+    id: int
+    society_id: int
+    is_generated: bool
+    generated_at: datetime | None = None
+    bill_count: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ReceiptCreate(BaseModel):
+    payment_id: int
+    receipt_number: str
+
+
+class ReceiptRead(ReceiptCreate):
+    id: int
+    generated_at: datetime
+    generated_by_user_id: int
+    pdf_url: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class AmenityCreate(BaseModel):
+    name: str
+    description: str | None = None
+    capacity: int
+    location: str | None = None
+    rules: str | None = None
+    booking_price: float = 0
+
+
+class AmenityRead(AmenityCreate):
+    id: int
+    society_id: int
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AmenityBookingCreate(BaseModel):
+    amenity_id: int
+    start_datetime: datetime
+    end_datetime: datetime
+    purpose: str | None = None
+    notes: str | None = None
+
+
+class AmenityBookingRead(AmenityBookingCreate):
+    id: int
+    resident_user_id: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+# PHOTO GALLERY & ENHANCED NOTICES - From external repo integration
+# ============================================================
+
+
+class PhotoGalleryAlbumCreate(BaseModel):
+    title: str
+    description: str | None = None
+    cover_image_url: str | None = None
+    is_published: bool = True
+    sort_order: int = 0
+
+
+class PhotoGalleryAlbumRead(BaseModel):
+    id: int
+    society_id: int
+    title: str
+    description: str | None = None
+    cover_image_url: str | None = None
+    is_published: bool
+    sort_order: int
+    created_by_user_id: int
+    image_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PhotoGalleryImageCreate(BaseModel):
+    album_id: int
+    title: str | None = None
+    image_url: str
+    thumbnail_url: str | None = None
+    description: str | None = None
+    sort_order: int = 0
+
+
+class PhotoGalleryImageRead(BaseModel):
+    id: int
+    album_id: int
+    title: str | None = None
+    image_url: str
+    thumbnail_url: str | None = None
+    description: str | None = None
+    sort_order: int
+    is_published: bool
+    uploaded_by_user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NoticeEnhancedCreate(BaseModel):
+    title: str
+    notice_type: str = "general"  # general, event, emergency, meeting, holiday
+    message: str
+    file_url: str | None = None
+    is_urgent: bool = False
+    is_published: bool = True
+    expires_at: datetime | None = None
+
+
+class NoticeEnhancedRead(BaseModel):
+    id: int
+    society_id: int
+    title: str
+    notice_type: str
+    message: str
+    file_url: str | None = None
+    is_urgent: bool
+    is_published: bool
+    published_by_user_id: int
+    published_at: datetime
+    expires_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

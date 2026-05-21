@@ -3,15 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
 from app.api.routes import (
+    amenities,
     auth,
     billing,
     billing_advanced,
     communications,
+    communications_enhanced,
     community,
+    community_dashboard,
     dashboard,
     erp,
+    maintenance_enhanced,
+    notices_enhanced,
     operations,
     payments,
+    photo_gallery,
     reports,
     residents,
     societies,
@@ -20,6 +26,7 @@ from app.api.routes import (
     users,
     vendors,
     visitors,
+    visitors_enhanced,
 )
 from app.core.config import settings
 from app.core.database import Base, engine, SessionLocal
@@ -152,6 +159,17 @@ app.include_router(reports.router, prefix=settings.api_prefix)
 app.include_router(communications.router, prefix=settings.api_prefix)
 app.include_router(billing_advanced.router, prefix=settings.api_prefix)
 app.include_router(community.router, prefix=settings.api_prefix)
+
+# Society360 Enhancement Routes - Phase 1
+app.include_router(maintenance_enhanced.router, prefix=settings.api_prefix)
+app.include_router(communications_enhanced.router, prefix=settings.api_prefix)
+app.include_router(visitors_enhanced.router, prefix=settings.api_prefix)
+app.include_router(amenities.router, prefix=settings.api_prefix)
+
+# External repo integration - Photo Gallery, Enhanced Notices, Community Dashboard
+app.include_router(photo_gallery.router, prefix=settings.api_prefix)
+app.include_router(notices_enhanced.router, prefix=settings.api_prefix)
+app.include_router(community_dashboard.router, prefix=settings.api_prefix)
 
 
 @app.get("/")
